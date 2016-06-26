@@ -28,5 +28,7 @@ project/plugins/project/
 .scala_dependencies
 .worksheet
 
-#
+# Custome gitignore
 *.token
+
+.idea
