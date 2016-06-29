@@ -4,8 +4,8 @@ Bot-reminder.
 
 ## It uses
 And contains examples of usage:
-* [Scala telegram bot api](https://github.com/mukel/telegrambot4s) integration;
-* [Slick](http://slick.lightbend.com/) integration;
+* [Scala telegram bot api](https://github.com/mukel/telegrambot4s) for bot engine;
+* [Flyway](https://flywaydb.org/) for migration;
 
 ## Roadmap
 This bot should accept your messages, parse hashtags and let your
@@ -36,4 +36,30 @@ GRANT
 
 ```
 
-Use `press.lis.lise.model.Init` object to initialize schema.
+### Migration
+
+We are using flyway for migration.
+
+To initialize or migrate database use:
+```
+sbt flywayMigrate
+```
+
+To get info about migration:
+```
+sbt flywayInfo
+```
+
+To your migrations:
+```
+sbt flywayClean
+```
+
+_Be careful you should clean with the same scripts that you initialized._
+
+**Don't commit production settings, instead use:**
+```
+sbt flywayMigrate -Dflyway.user=prodUser -Dflyway.password=prodPassword -Dflyway.url=prodUrl
+```
+
+[Read more](https://flywaydb.org/documentation/sbt/).
