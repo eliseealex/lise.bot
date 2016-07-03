@@ -12,9 +12,6 @@ class MessageDao extends StrictLogging {
   ConnectionPool.singleton("jdbc:postgresql://localhost:5432/lise", "lise_root", "root")
 
   def writeMessage(telegramChatId: Long, telegramMessageId: Long, text: String) =
-    writeMessage(String.valueOf(telegramChatId), String.valueOf(telegramMessageId), text)
-
-  def writeMessage(telegramChatId: String, telegramMessageId: String, text: String) =
     DB localTx {
       implicit session =>
         // SELECT OR INSERT
