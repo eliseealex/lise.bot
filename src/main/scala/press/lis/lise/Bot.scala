@@ -3,7 +3,7 @@ package press.lis.lise
 import com.typesafe.scalalogging.StrictLogging
 import info.mukel.telegrambot4s.api.{Polling, TelegramBot}
 import info.mukel.telegrambot4s.methods.{ParseMode, SendMessage}
-import info.mukel.telegrambot4s.models.Message
+import info.mukel.telegrambot4s.models.{CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message}
 import press.lis.lise.model.MessageDao
 
 import scala.io.Source
@@ -41,6 +41,16 @@ object Bot extends TelegramBot with Polling with App with StrictLogging {
               logger.warn("Got exception: $ex")
           })
 
+      case Some("/showTags") =>
+        val markup = InlineKeyboardMarkup(
+          Seq(Seq(InlineKeyboardButton("test1", callbackData = Some("t")),
+            InlineKeyboardButton("test3", callbackData = Some("f"))),
+          Seq(InlineKeyboardButton("test2", callbackData = Some("p")))))
+
+        api.request(SendMessage(Left(message.chat.id), "test",
+          replyMarkup = Some(markup)))
+          .andThen(logFailRequest)
+
       case Some(t) =>
         logger.debug(s"Saving message: $message")
         messageDao.writeMessage(message.chat.id, message.messageId, message.text.get)
@@ -50,6 +60,11 @@ object Bot extends TelegramBot with Polling with App with StrictLogging {
     }
   }
 
+
+
   run()
 
+  override def handleCallbackQuery(callbackQuery: CallbackQuery): Unit = {
+    logger.info(s"You pressed: $callbackQuery")
+  }
 }
