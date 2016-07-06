@@ -13,7 +13,9 @@ libraryDependencies ++= Seq(
   "org.scalikejdbc" %% "scalikejdbc"       % "2.4.1",
   "org.postgresql" % "postgresql" % "9.4.1208.jre7",
   "com.zaxxer" % "HikariCP" % "2.3.3",
-  "org.liquibase" % "liquibase-core" % "3.0.5"
+  "org.liquibase" % "liquibase-core" % "3.0.5",
+  "com.twitter" % "twitter-text" % "1.13.4"
+
 )
 
 flywayUrl := "jdbc:postgresql://localhost:5432/lise"

@@ -6,6 +6,7 @@ Bot-reminder.
 And contains examples of usage:
 * [Scala telegram bot api](https://github.com/mukel/telegrambot4s) for bot engine;
 * [Flyway](https://flywaydb.org/) for migration;
+* [Twitter text](https://github.com/twitter/twitter-text) for hashtag extraction;
 
 ## Roadmap
 This bot should accept your messages, parse hashtags and let your
