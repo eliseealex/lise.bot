@@ -48,8 +48,11 @@ object Bot extends TelegramBot with Polling with App with StrictLogging {
       case Some("/showTags") =>
         val markup = InlineKeyboardMarkup(
           Seq(Seq(InlineKeyboardButton("test1", callbackData = Some("t")),
-            InlineKeyboardButton("test3", callbackData = Some("f"))),
-            Seq(InlineKeyboardButton("test2", callbackData = Some("p")))))
+            InlineKeyboardButton("test3", callbackData = Some("f")),
+            InlineKeyboardButton("test4", callbackData = Some("4")),
+            InlineKeyboardButton("test5", callbackData = Some("5")),
+            InlineKeyboardButton("test6", callbackData = Some("6")),
+            InlineKeyboardButton("test7", callbackData = Some("7")))))
 
         api.request(SendMessage(Left(message.chat.id), "test",
           replyMarkup = Some(markup)))

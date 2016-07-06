@@ -49,7 +49,7 @@ class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
                WITH new_row AS (
                  INSERT INTO tags (name)
                  SELECT $hashTag
-                 WHERE NOT EXISTS (SELECT * FROM tags WHERE name = $hashTag)
+                 WHERE NOT EXISTS (SELECT * FROM tags WHERE NAME = $hashTag)
                  RETURNING *
                )
                SELECT * FROM new_row
@@ -71,12 +71,14 @@ class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
 
     Future {
       DB readOnly { implicit session =>
-        val messages: List[String] = sql"""select m.message from messages m
-       join messages_sources ms on m.id = ms.message_id
-       join sources s ON ms.source_id = s.id
-       WHERE s.telegram_chat_id = $telegramChatId""".map(_.string("message"))
-          .list
-          .apply()
+        val messages: List[String] =
+          sql"""SELECT m.message FROM messages m
+                   JOIN messages_sources ms ON m.id = ms.message_id
+                   JOIN sources s ON ms.source_id = s.id
+                   WHERE s.telegram_chat_id = $telegramChatId"""
+            .map(_.string("message"))
+            .list
+            .apply()
 
         logger.debug(s"Got messages: $messages")
 
