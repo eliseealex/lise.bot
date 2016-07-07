@@ -2,6 +2,7 @@ package press.lis.lise.model
 
 import com.typesafe.scalalogging.StrictLogging
 import scalikejdbc._
+import scalikejdbc.config._
 
 import scala.concurrent.{ExecutionContext, Future, Promise}
 
@@ -9,9 +10,8 @@ import scala.concurrent.{ExecutionContext, Future, Promise}
   * @author Aleksandr Eliseev
   */
 class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
-  Class.forName("org.postgresql.Driver")
 
-  ConnectionPool.singleton("jdbc:postgresql://localhost:5432/lise", "lise_root", "root")
+  DBs.setupAll()
 
   def writeMessage(telegramChatId: Long, telegramMessageId: Long, text: String, hashTags: Iterable[String]) =
     DB localTx {
