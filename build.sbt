@@ -19,9 +19,14 @@ libraryDependencies ++= Seq(
 
 )
 
+mainClass in Compile := Some("press.lis.lise.Bot")
+
 flywayUrl := "jdbc:postgresql://localhost:5432/lise"
 
 flywayUser := "lise_root"
 
 flywayPassword := "root"
 
+enablePlugins(JavaAppPackaging)
+
+enablePlugins(DockerPlugin)
