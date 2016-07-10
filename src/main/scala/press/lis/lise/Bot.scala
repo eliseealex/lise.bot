@@ -7,7 +7,7 @@ import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.StrictLogging
 import info.mukel.telegrambot4s.api.{Polling, TelegramBot}
 import info.mukel.telegrambot4s.methods.{ParseMode, SendMessage}
-import info.mukel.telegrambot4s.models.{CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message}
+import info.mukel.telegrambot4s.models._
 import press.lis.lise.model.MessageDao
 
 import scala.collection.JavaConversions._
@@ -31,7 +31,7 @@ object Bot extends TelegramBot with Polling with App with StrictLogging {
 
     try {
       message.text match {
-        case Some("/getAll") =>
+        case Some("/getall") =>
           messageDao.readMessages(message.chat.id)
             .onComplete({
               case Success(messageList) =>
@@ -46,16 +46,18 @@ object Bot extends TelegramBot with Polling with App with StrictLogging {
                 logger.warn("Got exception: $ex")
             })
 
-        case Some("/showTags") =>
-          val markup = InlineKeyboardMarkup(
-            Seq(Seq(InlineKeyboardButton("test1", callbackData = Some("t")),
-              InlineKeyboardButton("test3", callbackData = Some("f")),
-              InlineKeyboardButton("test4", callbackData = Some("4")),
-              InlineKeyboardButton("test5", callbackData = Some("5")),
-              InlineKeyboardButton("test6", callbackData = Some("6")),
-              InlineKeyboardButton("test7", callbackData = Some("7")))))
+        case Some("/showtags") =>
+          val markup = ReplyKeyboardMarkup(
+            Seq(Seq(KeyboardButton("#tag1"),
+              KeyboardButton("test3")),
+            Seq(
+              KeyboardButton("test4"),
+              KeyboardButton("test5"),
+              KeyboardButton("test6"),
+              KeyboardButton("test7"))),
+            resizeKeyboard = Some(true))
 
-          api.request(SendMessage(Left(message.chat.id), "test",
+          api.request(SendMessage(Left(message.chat.id), "Choose your tag",
             replyMarkup = Some(markup)))
             .andThen(logFailRequest)
 

@@ -30,3 +30,7 @@ flywayPassword := "root"
 enablePlugins(JavaAppPackaging)
 
 enablePlugins(DockerPlugin)
+
+maintainer in Docker := "eliseealex"
+
+packageName in Docker := "eliseealex/lise-bot"
