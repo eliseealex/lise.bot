@@ -90,4 +90,30 @@ class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
 
     p.future
   }
+
+  def getUserTags(telegramChatId: Long): Future[List[String]] = {
+    val p = Promise[List[String]]
+
+    Future {
+      DB readOnly { implicit session =>
+        val messages: List[String] =
+          sql"""SELECT DISTINCT t.name FROM tags t
+                   JOIN messages_tags mt ON t.id = mt.tag_id
+                   JOIN messages_sources ms ON ms.message_id = mt.message_id
+                   JOIN sources s ON s.id = ms.source_id
+                   WHERE s.telegram_chat_id = $telegramChatId"""
+            .map(_.string("name"))
+            .list
+            .apply()
+
+        logger.debug(s"Got tags: $messages")
+
+        p success messages
+      }
+
+      p success List()
+    }
+
+    p.future
+  }
 }

@@ -43,23 +43,30 @@ object Bot extends TelegramBot with Polling with App with StrictLogging {
                   parseMode = Some(ParseMode.Markdown))).andThen(logFailRequest)
 
               case ex =>
-                logger.warn("Got exception: $ex")
+                logger.warn("Failed to get messages: $ex")
             })
 
         case Some("/showtags") =>
-          val markup = ReplyKeyboardMarkup(
-            Seq(Seq(KeyboardButton("#tag1"),
-              KeyboardButton("test3")),
-            Seq(
-              KeyboardButton("test4"),
-              KeyboardButton("test5"),
-              KeyboardButton("test6"),
-              KeyboardButton("test7"))),
-            resizeKeyboard = Some(true))
+          messageDao.getUserTags(message.chat.id)
+            .onComplete({
+              case Success (messageList) =>
+                val buttons =
+                  messageList
+                    .grouped(3)
+                    .map(tags => tags.map(tag => KeyboardButton(s"#$tag")))
+                    .toSeq
 
-          api.request(SendMessage(Left(message.chat.id), "Choose your tag",
-            replyMarkup = Some(markup)))
-            .andThen(logFailRequest)
+                val markup = ReplyKeyboardMarkup(
+                  buttons,
+                  resizeKeyboard = Some(true))
+
+                api.request(SendMessage(Left(message.chat.id), "Choose a tag to get notes",
+                  replyMarkup = Some(markup)))
+                  .andThen(logFailRequest)
+
+              case ex =>
+                logger.warn("Failed to get tags: $ex")
+            })
 
         case Some(t) =>
           logger.debug(s"Saving message: $message")
