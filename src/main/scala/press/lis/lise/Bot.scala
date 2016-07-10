@@ -32,6 +32,9 @@ object Bot extends TelegramBot with Polling with App with StrictLogging {
     try {
       message.text match {
         case Some("/getall") =>
+
+          logger.debug(s"Returning all messages (${message.chat})")
+
           messageDao.readMessages(message.chat.id)
             .onComplete({
               case Success(messageList) =>
@@ -43,13 +46,16 @@ object Bot extends TelegramBot with Polling with App with StrictLogging {
                   parseMode = Some(ParseMode.Markdown))).andThen(logFailRequest)
 
               case ex =>
-                logger.warn("Failed to get messages: $ex")
+                logger.warn(s"Failed to get messages: $ex")
             })
 
         case Some("/showtags") =>
+
+          logger.debug(s"Returning tags (${message.chat})")
+
           messageDao.getUserTags(message.chat.id)
             .onComplete({
-              case Success (messageList) =>
+              case Success(messageList) =>
                 val buttons =
                   messageList
                     .grouped(3)
@@ -65,7 +71,29 @@ object Bot extends TelegramBot with Polling with App with StrictLogging {
                   .andThen(logFailRequest)
 
               case ex =>
-                logger.warn("Failed to get tags: $ex")
+                logger.warn(s"Failed to get tags: $ex")
+            })
+
+        case Some(hashTag) if !hashTag.contains(" ") && hashTag.length > 0 &&
+          (hashTag.charAt(0).equals('#') || hashTag.charAt(0).equals('＃')) =>
+
+          val tag: String = hashTag.substring(1)
+
+          logger.debug(s"Returning messages for tag $tag (${message.chat})")
+
+          messageDao.getMessagesByTag(message.chat.id, tag)
+            .onComplete({
+              case Success(messageList) =>
+                val messages = messageList.mkString(";\n- ")
+
+                logger.debug(s"Your messages with tag $hashTag: $messages")
+
+                api.request(SendMessage(Left(message.chat.id),
+                  s"Your $hashTag messages:\n- $messages.",
+                  parseMode = Some(ParseMode.Markdown))).andThen(logFailRequest)
+
+              case ex =>
+                logger.warn(s"Failed to get messages by tag [$tag]: $ex")
             })
 
         case Some(t) =>
