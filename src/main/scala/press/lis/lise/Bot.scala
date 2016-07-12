@@ -37,6 +37,12 @@ object Bot extends TelegramBot with Polling with App with StrictLogging {
 
           messageDao.readMessages(message.chat.id)
             .onComplete({
+              case Success(messageList) if messageList.isEmpty =>
+
+                api.request(SendMessage(Left(message.chat.id),
+                  s"You have no messages",
+                  parseMode = Some(ParseMode.Markdown))).andThen(logFailRequest)
+
               case Success(messageList) =>
                 val messages = messageList.mkString(";\n- ")
 
@@ -55,6 +61,12 @@ object Bot extends TelegramBot with Polling with App with StrictLogging {
 
           messageDao.getUserTags(message.chat.id)
             .onComplete({
+              case Success(messageList) if messageList.isEmpty =>
+
+                api.request(SendMessage(Left(message.chat.id),
+                  s"You have no messages",
+                  parseMode = Some(ParseMode.Markdown))).andThen(logFailRequest)
+
               case Success(messageList) =>
                 val buttons =
                   messageList
@@ -64,7 +76,8 @@ object Bot extends TelegramBot with Polling with App with StrictLogging {
 
                 val markup = ReplyKeyboardMarkup(
                   buttons,
-                  resizeKeyboard = Some(true))
+                  resizeKeyboard = Some(true),
+                  oneTimeKeyboard = Some(true))
 
                 api.request(SendMessage(Left(message.chat.id), "Choose a tag to get notes",
                   replyMarkup = Some(markup)))
@@ -72,6 +85,31 @@ object Bot extends TelegramBot with Polling with App with StrictLogging {
 
               case ex =>
                 logger.warn(s"Failed to get tags: $ex")
+            })
+
+        case Some("/whatsnew") =>
+
+          logger.debug(s"Returning new ideas (${message.chat}")
+
+          messageDao.getMessagesForToday(message.chat.id)
+            .onComplete({
+              case Success(messageList) if messageList.isEmpty =>
+
+                api.request(SendMessage(Left(message.chat.id),
+                  s"You have no messages",
+                  parseMode = Some(ParseMode.Markdown))).andThen(logFailRequest)
+
+              case Success(messageList) =>
+                val messages = messageList.mkString(";\n- ")
+
+                logger.debug(s"Your today's messages: $messages")
+
+                api.request(SendMessage(Left(message.chat.id),
+                  s"Your today's messages:\n- $messages.",
+                  parseMode = Some(ParseMode.Markdown))).andThen(logFailRequest)
+
+              case ex =>
+                logger.warn(s"Failed to get today's messages: $ex")
             })
 
         case Some(hashTag) if !hashTag.contains(" ") && hashTag.length > 0 &&
@@ -83,6 +121,12 @@ object Bot extends TelegramBot with Polling with App with StrictLogging {
 
           messageDao.getMessagesByTag(message.chat.id, tag)
             .onComplete({
+              case Success(messageList) if messageList.isEmpty =>
+
+                api.request(SendMessage(Left(message.chat.id),
+                  s"You have no messages",
+                  parseMode = Some(ParseMode.Markdown))).andThen(logFailRequest)
+
               case Success(messageList) =>
                 val messages = messageList.mkString(";\n- ")
 
@@ -90,7 +134,8 @@ object Bot extends TelegramBot with Polling with App with StrictLogging {
 
                 api.request(SendMessage(Left(message.chat.id),
                   s"Your $hashTag messages:\n- $messages.",
-                  parseMode = Some(ParseMode.Markdown))).andThen(logFailRequest)
+                  parseMode = Some(ParseMode.Markdown),
+                  replyMarkup = Some(ReplyKeyboardHide(hideKeyboard = true)))).andThen(logFailRequest)
 
               case ex =>
                 logger.warn(s"Failed to get messages by tag [$tag]: $ex")

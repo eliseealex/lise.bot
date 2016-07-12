@@ -126,10 +126,36 @@ class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
           sql"""SELECT DISTINCT m.message FROM messages m
                    JOIN messages_tags mt ON m.id = mt.message_id
                    JOIN tags t ON t.id = mt.tag_id
-                   JOIN messages_sources ms ON m.id = mt.message_id
+                   JOIN messages_sources ms ON m.id = ms.message_id
                    JOIN sources s ON s.id = ms.source_id
                    WHERE s.telegram_chat_id = $telegramChatId
                    AND t.name = $tag"""
+            .map(_.string("message"))
+            .list
+            .apply()
+
+        logger.debug(s"Got messages: $messages")
+
+        p success messages
+      }
+
+      p success List()
+    }
+
+    p.future
+  }
+
+  def getMessagesForToday(telegramChatId: Long): Future[List[String]] = {
+    val p = Promise[List[String]]
+
+    Future {
+      DB readOnly { implicit session =>
+        val messages: List[String] =
+          sql"""SELECT DISTINCT m.message FROM messages m
+                   JOIN messages_sources ms ON m.id = ms.message_id
+                   JOIN sources s ON s.id = ms.source_id
+                   WHERE s.telegram_chat_id = $telegramChatId
+                   AND m.timestamp > NOW() - INTERVAL '1 day'"""
             .map(_.string("message"))
             .list
             .apply()
