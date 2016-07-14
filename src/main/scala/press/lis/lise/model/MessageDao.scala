@@ -151,11 +151,12 @@ class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
     Future {
       DB readOnly { implicit session =>
         val messages: List[String] =
-          sql"""SELECT DISTINCT m.message FROM messages m
+          sql"""SELECT DISTINCT m.message, m.id FROM messages m
                    JOIN messages_sources ms ON m.id = ms.message_id
                    JOIN sources s ON s.id = ms.source_id
                    WHERE s.telegram_chat_id = $telegramChatId
-                   AND m.timestamp > NOW() - INTERVAL '1 day'"""
+                   AND m.timestamp > NOW() - INTERVAL '1 day'
+                   ORDER BY m.id"""
             .map(_.string("message"))
             .list
             .apply()

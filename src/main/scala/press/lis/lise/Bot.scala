@@ -1,16 +1,14 @@
 package press.lis.lise
 
-import java.util
-
-import com.twitter.Extractor
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.StrictLogging
 import info.mukel.telegrambot4s.api.{Polling, TelegramBot}
 import info.mukel.telegrambot4s.methods.{ParseMode, SendMessage}
 import info.mukel.telegrambot4s.models._
+import press.lis.lise.MessageParser._
 import press.lis.lise.model.MessageDao
 
-import scala.collection.JavaConversions._
+import scala.concurrent.Future
 import scala.util.{Failure, Success, Try}
 
 /**
@@ -18,8 +16,11 @@ import scala.util.{Failure, Success, Try}
   * @author Aleksandr Eliseev
   */
 object Bot extends TelegramBot with Polling with App with StrictLogging {
+
   val messageDao = new MessageDao
-  val extractor = new Extractor
+
+  val messageParser = MessageParser
+
   val logFailRequest: PartialFunction[Try[Message], Unit] = {
     case Failure(x) => logger.warn(s"Request failed: $x")
   }
@@ -29,48 +30,48 @@ object Bot extends TelegramBot with Polling with App with StrictLogging {
   override def handleMessage(message: Message): Unit = {
     logger.trace(s"Message received: $message")
 
-    try {
-      message.text match {
-        case Some("/getall") =>
+    val sendMessage: (String) => Future[Message] = sendMessageTo(message.chat.id)
 
-          logger.debug(s"Returning all messages (${message.chat})")
+    val botMessage: BotMessage = messageParser.parse(message.text)
+
+    logger.debug(s"[${message.chat.id}] Accepted message: $botMessage")
+
+    try
+      botMessage match {
+        case _ if message.chat.id < 0 =>
+
+          sendMessage("Sorry, I can't work in group chat yet. Try to talk to me personally.")
+
+        case Command("getall") =>
 
           messageDao.readMessages(message.chat.id)
             .onComplete({
               case Success(messageList) if messageList.isEmpty =>
 
-                api.request(SendMessage(Left(message.chat.id),
-                  s"You have no messages",
-                  parseMode = Some(ParseMode.Markdown))).andThen(logFailRequest)
+                sendMessage(s"You have no messages")
 
               case Success(messageList) =>
+
                 val messages = messageList.mkString(";\n- ")
 
-                logger.debug(s"Returning all saved messages: $messages")
-                api.request(SendMessage(Left(message.chat.id),
-                  s"Your messages:\n- $messages.",
-                  parseMode = Some(ParseMode.Markdown))).andThen(logFailRequest)
+                sendMessage(s"Your messages:\n- $messages.")
 
               case ex =>
                 logger.warn(s"Failed to get messages: $ex")
             })
 
-        case Some("/showtags") =>
-
-          logger.debug(s"Returning tags (${message.chat})")
+        case Command("showtags") =>
 
           messageDao.getUserTags(message.chat.id)
             .onComplete({
               case Success(messageList) if messageList.isEmpty =>
 
-                api.request(SendMessage(Left(message.chat.id),
-                  s"You have no messages",
-                  parseMode = Some(ParseMode.Markdown))).andThen(logFailRequest)
+                sendMessage(s"You have no messages")
 
               case Success(messageList) =>
                 val buttons =
                   messageList
-                    .grouped(3)
+                    .grouped(2)
                     .map(tags => tags.map(tag => KeyboardButton(s"#$tag")))
                     .toSeq
 
@@ -87,83 +88,65 @@ object Bot extends TelegramBot with Polling with App with StrictLogging {
                 logger.warn(s"Failed to get tags: $ex")
             })
 
-        case Some("/whatsnew") =>
-
-          logger.debug(s"Returning new ideas (${message.chat}")
+        case Command("whatsnew") =>
 
           messageDao.getMessagesForToday(message.chat.id)
             .onComplete({
               case Success(messageList) if messageList.isEmpty =>
 
-                api.request(SendMessage(Left(message.chat.id),
-                  s"You have no messages",
-                  parseMode = Some(ParseMode.Markdown))).andThen(logFailRequest)
+                sendMessage(s"You have no messages")
 
               case Success(messageList) =>
+
                 val messages = messageList.mkString(";\n- ")
 
-                logger.debug(s"Your today's messages: $messages")
-
-                api.request(SendMessage(Left(message.chat.id),
-                  s"Your today's messages:\n- $messages.",
-                  parseMode = Some(ParseMode.Markdown))).andThen(logFailRequest)
+                sendMessage(s"Your today's messages:\n- $messages.")
 
               case ex =>
                 logger.warn(s"Failed to get today's messages: $ex")
             })
 
-        case Some(hashTag) if !hashTag.contains(" ") && hashTag.length > 0 &&
-          (hashTag.charAt(0).equals('#') || hashTag.charAt(0).equals('＃')) =>
-
-          val tag: String = hashTag.substring(1)
-
-          logger.debug(s"Returning messages for tag $tag (${message.chat})")
+        case HashTag(tag) =>
 
           messageDao.getMessagesByTag(message.chat.id, tag)
             .onComplete({
               case Success(messageList) if messageList.isEmpty =>
 
-                api.request(SendMessage(Left(message.chat.id),
-                  s"You have no messages",
-                  parseMode = Some(ParseMode.Markdown))).andThen(logFailRequest)
+                sendMessage(s"You have no messages")
 
               case Success(messageList) =>
+
                 val messages = messageList.mkString(";\n- ")
 
-                logger.debug(s"Your messages with tag $hashTag: $messages")
-
-                api.request(SendMessage(Left(message.chat.id),
-                  s"Your $hashTag messages:\n- $messages.",
-                  parseMode = Some(ParseMode.Markdown),
-                  replyMarkup = Some(ReplyKeyboardHide(hideKeyboard = true)))).andThen(logFailRequest)
+                sendMessage(s"Your $tag messages:\n- $messages.")
 
               case ex =>
                 logger.warn(s"Failed to get messages by tag [$tag]: $ex")
             })
 
-        case Some(t) =>
-          logger.debug(s"Saving message: $message")
+        case Command(unknown) =>
 
-          val text: String = message.text.get
+          sendMessage(s"Sorry i don't understand '$unknown' =(")
 
-          val hashtags: util.List[String] = extractor.extractHashtags(text)
-
-          logger.info(s"Hashtags parsed: $hashtags")
+        case TextMessage(text, hashtags) =>
 
           messageDao.writeMessage(message.chat.id, message.messageId, text, hashtags)
 
-        case _ =>
+        case Unknown =>
+
           logger.warn(s"Not implemented for: $message")
       }
-    } catch {
+    catch {
       case ex: Exception => logger.warn(s"Failed to process request: $ex")
     }
   }
 
+  def sendMessageTo(chatId: Long)(message: String) =
+    api.request(SendMessage(Left(chatId), message,
+      parseMode = Some(ParseMode.Markdown),
+      replyMarkup = Some(ReplyKeyboardHide(hideKeyboard = true))))
+      .andThen(logFailRequest)
+
 
   run()
-
-  override def handleCallbackQuery(callbackQuery: CallbackQuery): Unit = {
-    logger.info(s"You pressed: $callbackQuery")
-  }
 }
