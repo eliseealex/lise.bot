@@ -13,19 +13,23 @@ class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
 
   DBs.setupAll()
 
-  def writeMessage(telegramChatId: Long, telegramMessageId: Long, text: String, hashTags: Iterable[String]) =
-    DB localTx {
-      implicit session =>
-        val messageId =
-          sql"""
+  def writeMessage(telegramChatId: Long, telegramMessageId: Long, text: String, hashTags: Iterable[String]) ={
+
+    val p = Promise[Long]
+
+    Future {
+      DB localTx {
+        implicit session =>
+          val messageId =
+            sql"""
            INSERT INTO messages (telegram_message_id, message)
                          VALUES ($telegramMessageId, $text)
         """.updateAndReturnGeneratedKey.apply()
 
-        // SELECT OR INSERT
-        // ;-- is a crutch around prepared statement http://stackoverflow.com/a/27609457
-        val sourceId =
-          sql"""
+          // SELECT OR INSERT
+          // ;-- is a crutch around prepared statement http://stackoverflow.com/a/27609457
+          val sourceId =
+            sql"""
            WITH new_row AS (
              INSERT INTO sources (telegram_chat_id)
              SELECT $telegramChatId
@@ -37,15 +41,15 @@ class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
            SELECT * FROM sources WHERE telegram_chat_id = $telegramChatId;--
         """.updateAndReturnGeneratedKey("id").apply()
 
-        sql"""
+          sql"""
             INSERT INTO messages_sources (message_id, source_id)
                          VALUES ($messageId, $sourceId)
         """.update().apply()
 
-        hashTags.toStream.distinct.foreach(hashTag => {
-          // SELECT OR INSERT WITH CRUTCH AS BEFORE
-          val tagId =
-            sql"""
+          hashTags.toStream.distinct.foreach(hashTag => {
+            // SELECT OR INSERT WITH CRUTCH AS BEFORE
+            val tagId =
+              sql"""
                WITH new_row AS (
                  INSERT INTO tags (name)
                  SELECT $hashTag
@@ -57,14 +61,20 @@ class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
                SELECT * FROM tags WHERE name = $hashTag;--
             """.updateAndReturnGeneratedKey("id").apply()
 
-          sql"""
+            sql"""
             INSERT INTO messages_tags (message_id, tag_id)
                          VALUES ($messageId, $tagId)
           """.update().apply()
-        })
+          })
 
-        logger.debug(s"[$messageId] New message inserted")
+          logger.debug(s"[$messageId] New message inserted")
+
+          p success messageId
+      }
     }
+
+    p.future
+  }
 
   def readMessages(telegramChatId: Long): Future[List[String]] = {
     val p = Promise[List[String]]

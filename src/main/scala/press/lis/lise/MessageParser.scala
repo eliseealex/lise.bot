@@ -13,7 +13,7 @@ object MessageParser {
 
   val extractor = new Extractor
 
-  def parse(message: Option[String]): BotMessage = {
+  def parse(message: Option[String], id: Long): BotMessage = {
 
     message match {
       case Some(command) if !command.contains(" ") && command.length > 0 &&
@@ -30,7 +30,7 @@ object MessageParser {
 
         val hashtags: util.List[String] = extractor.extractHashtags(text)
 
-        TextMessage(text, hashtags)
+        TextMessage(id, text, hashtags)
 
       case _ =>
 
@@ -42,7 +42,7 @@ object MessageParser {
 
   case class HashTag(tag: String) extends BotMessage
 
-  case class TextMessage(text: String, hashTags: Seq[String]) extends BotMessage
+  case class TextMessage(messageId: Long, text: String, hashTags: Seq[String]) extends BotMessage
 
   case class Command(command: String) extends BotMessage
 
