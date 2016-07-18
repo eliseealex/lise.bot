@@ -13,7 +13,7 @@ class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
 
   DBs.setupAll()
 
-  def writeMessage(telegramChatId: Long, telegramMessageId: Long, text: String, hashTags: Iterable[String]) ={
+  def writeMessage(telegramChatId: Long, telegramMessageId: Long, text: String, hashTags: Iterable[String]) = {
 
     val p = Promise[Long]
 
@@ -70,6 +70,44 @@ class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
           logger.debug(s"[$messageId] New message inserted")
 
           p success messageId
+      }
+    }
+
+    p.future
+  }
+
+  def addTag(messageId: Long, hashTag: String) = {
+
+    val p = Promise[Long]
+
+    Future {
+      DB localTx {
+        implicit session =>
+          // SELECT OR INSERT WITH CRUTCH AS BEFORE
+          val tagId =
+            sql"""
+               WITH new_row AS (
+                 INSERT INTO tags (name)
+                 SELECT $hashTag
+                 WHERE NOT EXISTS (SELECT * FROM tags WHERE NAME = $hashTag)
+                 RETURNING *
+               )
+               SELECT * FROM new_row
+               UNION
+               SELECT * FROM tags WHERE name = $hashTag;--
+            """.updateAndReturnGeneratedKey("id").apply()
+
+          sql"""
+            INSERT INTO messages_tags (message_id, tag_id)
+                         SELECT $messageId, $tagId
+                         WHERE NOT EXISTS
+                         (SELECT * FROM messages_tags
+                            WHERE message_id = $messageId AND tag_id = $tagId)
+          """.update().apply()
+
+          logger.debug(s"[$messageId] Hashtag added")
+
+          p success tagId
       }
     }
 

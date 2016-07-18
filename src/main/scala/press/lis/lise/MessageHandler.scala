@@ -32,7 +32,7 @@ object MessageHandler {
   def sendMessageTo(api: TelegramApiAkka, logFailRequest: PartialFunction[Try[Message], Unit])
                    (chatId: Long)(message: String)(implicit ec: ExecutionContext) =
     api.request(SendMessage(Left(chatId), message,
-      parseMode = Some(ParseMode.Markdown),
+      parseMode = Some(ParseMode.HTML),
       replyMarkup = Some(ReplyKeyboardHide(hideKeyboard = true))))
       .andThen(logFailRequest)
 
@@ -64,7 +64,16 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
 
   val sendMessage: (String) => Future[Message] = MessageHandler.sendMessageTo(api, logFailRequest)(chatId)
 
-  when(Dying) {
+  when(Dying, stateTimeout = 3 minutes) {
+    case Event(StateTimeout, _) =>
+
+      logger.warn(s"[$chatId] Rescheduling killer for")
+
+      // Messages have at most once delivery. Guarantee eventual consistency.
+      context.parent ! KillMessageHandler(chatId)
+
+      goto(Dying)
+
     case Event(anything, _) =>
       // Rescheduling to process after restart
       context.parent ! anything
@@ -81,12 +90,14 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
       goto(Dying)
   }
 
-  when(MessageWritten, stateTimeout = 5 minutes) {
+  when(MessageWritten, stateTimeout = 30 minutes) {
     case Event(HashTag(tag), message: WrittenMessage) =>
 
-      logger.info(s"[$chatId] Writing hastTag to previous message [${message.id}]")
+      logger.debug(s"[$chatId] Writing hastTag [$tag] to previous message [${message.id}]")
 
-      sendMessage("Not implemented yet =(")
+      messageDao.addTag(message.id, tag)
+
+      sendMessage(s"Yup, #$tag added. You can add another one.")
 
       stay()
 

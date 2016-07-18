@@ -4,6 +4,7 @@ Bot-reminder.
 
 ## It uses
 And contains examples of usage:
+* [Akka finite state machine](http://doc.akka.io/docs/akka/snapshot/scala/fsm.html) for contextual behavior;
 * [Scala telegram bot api](https://github.com/mukel/telegrambot4s) for bot engine;
 * [Flyway](https://flywaydb.org/) for migration;
 * [Twitter text](https://github.com/twitter/twitter-text) for hashtag extraction;
