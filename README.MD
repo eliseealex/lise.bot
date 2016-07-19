@@ -50,6 +50,7 @@ You can run bot locally from docker repository simply:
 
 ```
 
+Use `--net=host` access Postgres through localhost.
 Hint: [use explicit tag](https://medium.com/@mccode/the-misunderstood-docker-tag-latest-af3babfd6375#.noul4k4q5).
 
 ### Postgres set up
@@ -66,6 +67,12 @@ CREATE ROLE
 # GRANT ALL privileges ON DATABASE lise TO lise_root;
 GRANT
 
+```
+
+To provide access from localhost with password change `pb_hba.conf` to match:
+```
+# "local" is for Unix domain socket connections only
+local   all             all                                     md5
 ```
 
 ### Migration
@@ -94,4 +101,18 @@ _Be careful you should clean with the same scripts that you initialized._
 sbt flywayMigrate -Dflyway.user=prodUser -Dflyway.password=prodPassword -Dflyway.url=prodUrl
 ```
 
-[Read more](https://flywaydb.org/documentation/sbt/).
+#### Console utility
+
+Or you can use [console flyway utility](https://flywaydb.org/getstarted/firststeps/commandline) with:
+
+```
+./flyway -user=prodUser -password=prodPass -url=jdbc:postgresql://localhost:5432/prodDatabase -locations=filesystem:/home/user/path/to/scripts/ migrate
+```
+
+To install it on linux:
+
+1. [download](https://flywaydb.org/getstarted/download);
+1. unarchive with `tar -xvf flyway-commandline-4.0.3-linux-x64.tar.gz`;
+1. change directory to anarchived.
+
+[Read more about flyway](https://flywaydb.org/documentation/sbt/).

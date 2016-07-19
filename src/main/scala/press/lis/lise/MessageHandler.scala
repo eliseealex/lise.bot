@@ -50,6 +50,8 @@ object MessageHandler {
 
   case object MessageWritten extends BotStates
 
+  case object MessageRemoved extends BotStates
+
   case object WhatsNew extends BotStates
 
   case object Dying extends BotStates
@@ -103,11 +105,31 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
 
     case Event(Command("remove"), message: WrittenMessage) =>
 
-      logger.info(s"[$chatId] Deleting written message [${message.id}]")
+      logger.debug(s"[$chatId] Deleting written message [${message.id}]")
 
-      sendMessage("Not implemented yet =(")
+      messageDao.removeMessage(message.id).andThen({
+        case Success(_) =>
+          sendMessage("Message removed. You can /restore it")
+        case Failure(f) =>
+          logger.warn(s"[${message.id}] Failed to remove message", f)
+      })
 
-      stay()
+      goto(MessageRemoved)
+  }
+
+  when(MessageRemoved, stateTimeout = 30 minutes) {
+    case Event(Command("restore"), message: WrittenMessage) =>
+
+      logger.debug(s"[$chatId] Restoring message [${message.id}]")
+
+      messageDao.restoreMessage(message.id).andThen({
+        case Success(_) =>
+          sendMessage("Message restored. You still can add hashtags or /remove it one more time")
+        case Failure(f) =>
+          logger.warn(s"[${message.id}] Failed to remove message", f)
+      })
+
+      goto(MessageWritten)
   }
 
   whenUnhandled {
@@ -197,7 +219,7 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
             sendMessage(s"Your $tag messages:\n- $messages.")
 
           case ex =>
-            logger.warn(s"Failed to get messages by tag [$tag]: $ex")
+            logger.warn(s"[$chatId] Failed to get messages by tag [$tag]: $ex")
         })
 
       goto(Idle)

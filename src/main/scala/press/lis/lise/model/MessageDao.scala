@@ -13,6 +13,9 @@ class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
 
   DBs.setupAll()
 
+  private val OPENED = 0
+  private val REMOVED = 1
+
   def writeMessage(telegramChatId: Long, telegramMessageId: Long, text: String, hashTags: Iterable[String]) = {
 
     val p = Promise[Long]
@@ -123,7 +126,8 @@ class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
           sql"""SELECT m.message FROM messages m
                    JOIN messages_sources ms ON m.id = ms.message_id
                    JOIN sources s ON ms.source_id = s.id
-                   WHERE s.telegram_chat_id = $telegramChatId"""
+                   WHERE s.telegram_chat_id = $telegramChatId
+                    AND m.status != $REMOVED"""
             .map(_.string("message"))
             .list
             .apply()
@@ -147,9 +151,11 @@ class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
         val tags: List[String] =
           sql"""SELECT DISTINCT t.name FROM tags t
                    JOIN messages_tags mt ON t.id = mt.tag_id
+                   JOIN messages m ON m.id = mt.message_id
                    JOIN messages_sources ms ON ms.message_id = mt.message_id
                    JOIN sources s ON s.id = ms.source_id
-                   WHERE s.telegram_chat_id = $telegramChatId"""
+                   WHERE s.telegram_chat_id = $telegramChatId
+                    AND m.status != $REMOVED"""
             .map(_.string("name"))
             .list
             .apply()
@@ -177,7 +183,8 @@ class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
                    JOIN messages_sources ms ON m.id = ms.message_id
                    JOIN sources s ON s.id = ms.source_id
                    WHERE s.telegram_chat_id = $telegramChatId
-                   AND t.name = $tag"""
+                    AND t.name = $tag
+                    AND m.status != $REMOVED"""
             .map(_.string("message"))
             .list
             .apply()
@@ -203,7 +210,8 @@ class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
                    JOIN messages_sources ms ON m.id = ms.message_id
                    JOIN sources s ON s.id = ms.source_id
                    WHERE s.telegram_chat_id = $telegramChatId
-                   AND m.timestamp > NOW() - INTERVAL '1 day'
+                     AND m.timestamp > NOW() - INTERVAL '1 day'
+                     AND m.status != $REMOVED
                    ORDER BY m.id"""
             .map(_.string("message"))
             .list
@@ -218,5 +226,35 @@ class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
     }
 
     p.future
+  }
+
+  def removeMessage(messageId: Long) = {
+    Future {
+      DB localTx { implicit session =>
+          sql"""
+            UPDATE messages SET
+              status = $REMOVED,
+              status_change = DEFAULT
+              WHERE id = $messageId
+        """.update().apply()
+
+        logger.debug(s"[$messageId] Message removed")
+      }
+    }
+  }
+
+  def restoreMessage(messageId: Long) = {
+    Future {
+      DB localTx { implicit session =>
+          sql"""
+            UPDATE messages SET
+              status = $OPENED,
+              status_change = DEFAULT
+              WHERE id = $messageId
+        """.update().apply()
+
+        logger.debug(s"[$messageId] Message restored")
+      }
+    }
   }
 }
