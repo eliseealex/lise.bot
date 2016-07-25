@@ -12,7 +12,7 @@ import press.lis.lise.model.MessageDao
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.language.postfixOps
 import scala.util.{Failure, Success, Try}
 
@@ -40,9 +40,10 @@ object MessageHandler {
 
   sealed trait StateData
 
+  // TODO refactor states and move this class to DAO.
   case class WrittenMessage(id: Long, text: String, hastTags: Seq[String]) extends StateData
 
-  case class WhatsNew(leftNew: List[String]) extends StateData
+  case class ReadingMessages(leftNew: List[String]) extends StateData
 
   case object Uninitialized extends StateData
 
@@ -52,7 +53,7 @@ object MessageHandler {
 
   case object MessageRemoved extends BotStates
 
-  case object WhatsNew extends BotStates
+  case object Reading extends BotStates
 
   case object Dying extends BotStates
 
@@ -92,7 +93,7 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
       goto(Dying)
   }
 
-  when(MessageWritten, stateTimeout = 30 minutes) {
+  when(MessageWritten, stateTimeout = 2 hours) {
     case Event(HashTag(tag), message: WrittenMessage) =>
 
       logger.debug(s"[$chatId] Writing hastTag [$tag] to previous message [${message.id}]")
@@ -117,7 +118,15 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
       goto(MessageRemoved)
   }
 
-  when(MessageRemoved, stateTimeout = 30 minutes) {
+  when(Reading, stateTimeout = 2 hours) {
+    case Event(Command("next"), ReadingMessages(messages)) =>
+
+      logger.debug("Going to the next message")
+
+      goto(Reading) using ReadingMessages(messages.tail)
+  }
+
+  when(MessageRemoved, stateTimeout = 2 hours) {
     case Event(Command("restore"), message: WrittenMessage) =>
 
       logger.debug(s"[$chatId] Restoring message [${message.id}]")
@@ -130,6 +139,26 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
       })
 
       goto(MessageWritten)
+  }
+
+  onTransition {
+    case _ -> Reading =>
+      nextStateData match {
+        case ReadingMessages(messages) =>
+
+          sendMessage(messages.head)
+
+          if (messages.size > 1) {
+            sendMessage(s"Use /next to read ${messages.size - 1} more messages. ")
+          }
+          else {
+            sendMessage("You're great! It was your last message.")
+          }
+
+        case x =>
+
+          logger.warn(s"Unknown state data in read state: $x")
+      }
   }
 
   whenUnhandled {
@@ -186,49 +215,35 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
 
     case Event(Command("whatsnew"), _) =>
 
-      messageDao.getMessagesForToday(chatId)
-        .onComplete({
-          case Success(messageList) if messageList.isEmpty =>
+      Try(Await.result(
+        messageDao.getMessagesForToday(chatId), 5 seconds)) match {
+        case Success(list) =>
+          goto(Reading) using ReadingMessages(list)
+        case Failure(x) =>
+          // TODO what does it mean to user if we can't read tags for a few seconds?
+          logger.warn(s"[$chatId] Failed to get new messages")
 
-            sendMessage(s"You have no messages")
-
-          case Success(messageList) =>
-
-            val messages = messageList.mkString(";\n- ")
-
-            sendMessage(s"Your today's messages:\n- $messages.")
-
-          case ex =>
-            logger.warn(s"Failed to get today's messages: $ex")
-        })
-
-      goto(Idle)
+          stay
+      }
 
     case Event(HashTag(tag), _) =>
 
-      messageDao.getMessagesByTag(chatId, tag)
-        .onComplete({
-          case Success(messageList) if messageList.isEmpty =>
+      Try(Await.result(
+        messageDao.getMessagesByTag(chatId, tag), 5 seconds)) match {
+        case Success(list) =>
+          goto(Reading) using ReadingMessages(list)
+        case Failure(x) =>
+          // TODO what does it mean to user if we can't read tags for a few seconds?
+          logger.warn(s"[$chatId] Failed to obtain message by tag $tag")
 
-            sendMessage(s"You have no messages")
-
-          case Success(messageList) =>
-
-            val messages = messageList.mkString(";\n- ")
-
-            sendMessage(s"Your $tag messages:\n- $messages.")
-
-          case ex =>
-            logger.warn(s"[$chatId] Failed to get messages by tag [$tag]: $ex")
-        })
-
-      goto(Idle)
+          stay
+      }
 
     case Event(Command(unknown), _) =>
 
       sendMessage(s"Sorry i don't understand '$unknown' =(")
 
-      goto(Idle)
+      stay
 
     case Event(TextMessage(telegramId, text, hashtags), _) =>
 
