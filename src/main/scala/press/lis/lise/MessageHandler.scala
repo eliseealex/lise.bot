@@ -213,7 +213,7 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
             logger.warn(s"Failed to get tags: $ex")
         })
 
-      goto(Idle) using ReadingMessages(List())
+      stay() using ReadingMessages(List())
 
     case Event(Command("whatsnew"), _) =>
 
