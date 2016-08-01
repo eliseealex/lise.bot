@@ -9,6 +9,7 @@ import press.lis.lise.MessageHandler._
 import press.lis.lise.MessageHandlerRouter.KillMessageHandler
 import press.lis.lise.MessageParser.{Command, HashTag, TextMessage}
 import press.lis.lise.model.MessageDao
+import press.lis.lise.model.MessageDao.MessageDTO
 
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
@@ -40,12 +41,7 @@ object MessageHandler {
 
   sealed trait StateData
 
-  // TODO refactor states and move this class to DAO.
-  case class WrittenMessage(id: Long, text: String, hastTags: Seq[String]) extends StateData
-
-  case class ReadingMessages(leftNew: List[String]) extends StateData
-
-  case object Uninitialized extends StateData
+  case class ReadingMessages(leftNew: List[MessageDTO]) extends StateData
 
   case object Idle extends BotStates
 
@@ -61,7 +57,7 @@ object MessageHandler {
 
 class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao) extends FSM[BotStates, StateData] with StrictLogging {
 
-  startWith(Idle, Uninitialized)
+  startWith(Idle, ReadingMessages(List()))
 
   val logFailRequest = MessageHandler.logFailRequest(logger)
 
@@ -84,7 +80,7 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
       stay
   }
 
-  when(Idle, stateTimeout = 15 minutes) {
+  when(Idle, stateTimeout = 3 hours) {
     case Event(StateTimeout, _) =>
       logger.debug(s"[$chatId] Idle timeout, killing actor")
 
@@ -94,51 +90,40 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
   }
 
   when(MessageWritten, stateTimeout = 2 hours) {
-    case Event(HashTag(tag), message: WrittenMessage) =>
+    case Event(Command("next"), ReadingMessages(messages)) =>
 
-      logger.debug(s"[$chatId] Writing hastTag [$tag] to previous message [${message.id}]")
+      logger.debug(s"[$chatId] Going to read again")
 
-      messageDao.addTag(message.id, tag)
-
-      sendMessage(s"Yup, #$tag added. You can add another one.")
-
-      stay()
-
-    case Event(Command("remove"), message: WrittenMessage) =>
-
-      logger.debug(s"[$chatId] Deleting written message [${message.id}]")
-
-      messageDao.removeMessage(message.id).andThen({
-        case Success(_) =>
-          sendMessage("Message removed. You can /restore it")
-        case Failure(f) =>
-          logger.warn(s"[${message.id}] Failed to remove message", f)
-      })
-
-      goto(MessageRemoved)
+      goto(Reading) using ReadingMessages(messages.tail)
   }
 
   when(Reading, stateTimeout = 2 hours) {
     case Event(Command("next"), ReadingMessages(messages)) =>
 
-      logger.debug("Going to the next message")
+      logger.debug(s"[$chatId] Going to the next message")
 
       goto(Reading) using ReadingMessages(messages.tail)
   }
 
   when(MessageRemoved, stateTimeout = 2 hours) {
-    case Event(Command("restore"), message: WrittenMessage) =>
+    case Event(Command("restore"), message: ReadingMessages) =>
 
-      logger.debug(s"[$chatId] Restoring message [${message.id}]")
+      logger.debug(s"[$chatId] Restoring message [${message.leftNew.head.id}]")
 
-      messageDao.restoreMessage(message.id).andThen({
+      messageDao.restoreMessage(message.leftNew.head.id).andThen({
         case Success(_) =>
-          sendMessage("Message restored. You still can add hashtags or /remove it one more time")
+          sendMessage("Message restored. You still can add hashtags, /remove it or go to the /next")
         case Failure(f) =>
-          logger.warn(s"[${message.id}] Failed to remove message", f)
+          logger.warn(s"[${message.leftNew.head.id}] Failed to remove message", f)
       })
 
       goto(MessageWritten)
+
+    case Event(Command("next"), ReadingMessages(messages)) =>
+
+      logger.debug(s"[$chatId] Going to read again")
+
+      goto(Reading) using ReadingMessages(messages.tail)
   }
 
   onTransition {
@@ -146,54 +131,71 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
       nextStateData match {
         case ReadingMessages(messages) =>
 
-          sendMessage(messages.head)
+          sendMessage(messages.head.text)
+              .andThen{
+                case Success(_) =>
+                  if (messages.size > 1) {
+                    sendMessage(s"Use /next to read ${messages.size - 1} more messages, /remove it or add hashtag")
+                  }
+                  else {
+                    sendMessage("You're great! It was your last message in this list you can /remove it, add hashtag" +
+                      " or ask me to /showtags or /getall if you're brave enough.")
+                  }
+                case Failure(ex) =>
+                  logger.warn("Failed to send message", ex)
+              }
 
-          if (messages.size > 1) {
-            sendMessage(s"Use /next to read ${messages.size - 1} more messages. ")
-          }
-          else {
-            sendMessage("You're great! It was your last message.")
-          }
+
 
         case x =>
 
           logger.warn(s"Unknown state data in read state: $x")
       }
+
+    case _ -> Idle =>
+      messageDao.getMessagesForToday(chatId)
+        .andThen {
+          case Success(messages) if messages.nonEmpty =>
+            sendMessage(s"May be it's time to see /whatsnew? Today you have ${messages.size} messages.")
+          case _ =>
+            sendMessage(s"Ask me to /showtags. Maybe you forgot something interesting?")
+        }
   }
 
   whenUnhandled {
 
     case Event(Command("getall"), _) =>
 
-      messageDao.readMessages(chatId)
-        .onComplete({
-          case Success(messageList) if messageList.isEmpty =>
+      Try(Await.result(
+        messageDao.readMessages(chatId), 5 seconds)) match {
+        case Success(messageList) if messageList.isEmpty =>
 
-            sendMessage(s"You have no messages")
+          sendMessage(s"You have no messages")
 
-          case Success(messageList) =>
+          stay
 
-            val messages = messageList.mkString(";\n- ")
+        case Success(messageList) =>
 
-            sendMessage(s"Your messages:\n- $messages.")
+          goto(Reading) using ReadingMessages(messageList)
 
-          case ex =>
-            logger.warn(s"Failed to get messages: $ex")
-        })
+        case Failure(ex) =>
 
-      goto(Idle)
+          logger.warn(s"[$chatId] Failed to get new messages", ex)
+
+          stay
+      }
 
     case Event(Command("showtags"), _) =>
 
       messageDao.getUserTags(chatId)
         .onComplete({
-          case Success(messageList) if messageList.isEmpty =>
+          case Success(tags) if tags.isEmpty =>
 
-            sendMessage(s"You have no messages")
+            sendMessage(s"You have no tags")
 
-          case Success(messageList) =>
+          case Success(tags) =>
             val buttons =
-              messageList
+              tags
                 .grouped(2)
                 .map(tags => tags.map(tag => KeyboardButton(s"#$tag")))
                 .toSeq
@@ -211,7 +213,7 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
             logger.warn(s"Failed to get tags: $ex")
         })
 
-      goto(Idle)
+      goto(Idle) using ReadingMessages(List())
 
     case Event(Command("whatsnew"), _) =>
 
@@ -219,12 +221,35 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
         messageDao.getMessagesForToday(chatId), 5 seconds)) match {
         case Success(list) =>
           goto(Reading) using ReadingMessages(list)
+
         case Failure(x) =>
-          // TODO what does it mean to user if we can't read tags for a few seconds?
           logger.warn(s"[$chatId] Failed to get new messages")
 
           stay
       }
+
+    case Event(Command("remove"), ReadingMessages(head :: tail)) =>
+
+      logger.debug(s"[$chatId] Deleting written message [${head.id}]")
+
+      messageDao.removeMessage(head.id).andThen({
+        case Success(_) =>
+          sendMessage("Message removed. You can /restore it or go the /next if you sure.")
+        case Failure(f) =>
+          logger.warn(s"[${head.id}] Failed to remove message", f)
+      })
+
+      goto(MessageRemoved)
+
+    case Event(HashTag(tag), ReadingMessages(head :: tail)) =>
+
+      logger.debug(s"[$chatId] Writing hastTag [$tag] to previous message [${head.id}]")
+
+      messageDao.addTag(head.id, tag)
+
+      sendMessage(s"Yup, #$tag added. You can add another one.")
+
+      stay()
 
     case Event(HashTag(tag), _) =>
 
@@ -232,12 +257,26 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
         messageDao.getMessagesByTag(chatId, tag), 5 seconds)) match {
         case Success(list) =>
           goto(Reading) using ReadingMessages(list)
+
         case Failure(x) =>
-          // TODO what does it mean to user if we can't read tags for a few seconds?
           logger.warn(s"[$chatId] Failed to obtain message by tag $tag")
 
           stay
       }
+
+    case Event(Command("showmeyourstateplease"), _) =>
+
+      sendMessage(s"I'm in $stateName:$stateData")
+
+      stay
+
+    case Event(Command("start"), _) =>
+
+      sendMessage(s"Hi I'm Lise. I can keep your thoughts and organize them by #hashtags." +
+        s"\n\nTry to play with me! Send me a message and add #hashtag." +
+        s"\nUse /showtags to get list of tags and then messages for some tag.")
+
+      stay
 
     case Event(Command(unknown), _) =>
 
@@ -249,7 +288,7 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
 
       messageDao.writeMessage(chatId, telegramId, text, hashtags).andThen({
         case Success(id) =>
-          self ! WrittenMessage(id, text, hashtags)
+          self ! MessageDTO(id, text)
 
         case Failure(ex) =>
           logger.error(s"[$chatId] Failed to process message write $telegramId:", ex)
@@ -257,18 +296,18 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
 
       stay
 
-    case Event(message: WrittenMessage, _) =>
+    case Event(message: MessageDTO, reading: ReadingMessages) =>
 
       logger.debug(s"[$chatId] Going to written message mode.")
 
-      sendMessage("You can add additional hashtag or /remove message")
+      sendMessage("Send hashtag to add it to message.\nYou can /remove it or go back to your list using /next")
 
-      goto(MessageWritten) using message
+      goto(MessageWritten) using ReadingMessages(message :: reading.leftNew)
 
 
     case Event(StateTimeout, _) =>
 
-      goto(Idle) using Uninitialized
+      goto(Idle)
 
     case _ =>
       logger.warn("Unknown message type")

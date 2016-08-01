@@ -1,6 +1,7 @@
 package press.lis.lise.model
 
 import com.typesafe.scalalogging.StrictLogging
+import press.lis.lise.model.MessageDao.MessageDTO
 import scalikejdbc._
 import scalikejdbc.config._
 
@@ -9,6 +10,15 @@ import scala.concurrent.{ExecutionContext, Future, Promise}
 /**
   * @author Aleksandr Eliseev
   */
+object MessageDao {
+  case class MessageDTO(id: Long, text: String)
+
+  case object MessageDTO extends SQLSyntaxSupport[MessageDTO] {
+    def apply(rs: WrappedResultSet) = new MessageDTO(
+      rs.long("id"), rs.string("message"))
+  }
+}
+
 class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
 
   DBs.setupAll()
@@ -117,18 +127,18 @@ class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
     p.future
   }
 
-  def readMessages(telegramChatId: Long): Future[List[String]] = {
-    val p = Promise[List[String]]
+  def readMessages(telegramChatId: Long): Future[List[MessageDTO]] = {
+    val p = Promise[List[MessageDTO]]
 
     Future {
       DB readOnly { implicit session =>
-        val messages: List[String] =
-          sql"""SELECT m.message FROM messages m
+        val messages: List[MessageDTO] =
+          sql"""SELECT m.id, m.message FROM messages m
                    JOIN messages_sources ms ON m.id = ms.message_id
                    JOIN sources s ON ms.source_id = s.id
                    WHERE s.telegram_chat_id = $telegramChatId
                     AND m.status != $REMOVED"""
-            .map(_.string("message"))
+            .map(rs => MessageDTO(rs))
             .list
             .apply()
 
@@ -156,7 +166,7 @@ class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
                    JOIN sources s ON s.id = ms.source_id
                    WHERE s.telegram_chat_id = $telegramChatId
                     AND m.status != $REMOVED"""
-            .map(_.string("name"))
+            .map(rs => rs.string("name"))
             .list
             .apply()
 
@@ -171,13 +181,13 @@ class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
     p.future
   }
 
-  def getMessagesByTag(telegramChatId: Long, tag: String): Future[List[String]] = {
-    val p = Promise[List[String]]
+  def getMessagesByTag(telegramChatId: Long, tag: String): Future[List[MessageDTO]] = {
+    val p = Promise[List[MessageDTO]]
 
     Future {
       DB readOnly { implicit session =>
-        val messages: List[String] =
-          sql"""SELECT DISTINCT m.message FROM messages m
+        val messages: List[MessageDTO] =
+          sql"""SELECT DISTINCT m.id, m.message FROM messages m
                    JOIN messages_tags mt ON m.id = mt.message_id
                    JOIN tags t ON t.id = mt.tag_id
                    JOIN messages_sources ms ON m.id = ms.message_id
@@ -185,7 +195,7 @@ class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
                    WHERE s.telegram_chat_id = $telegramChatId
                     AND t.name = $tag
                     AND m.status != $REMOVED"""
-            .map(_.string("message"))
+            .map(rs => MessageDTO(rs))
             .list
             .apply()
 
@@ -200,20 +210,20 @@ class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
     p.future
   }
 
-  def getMessagesForToday(telegramChatId: Long): Future[List[String]] = {
-    val p = Promise[List[String]]
+  def getMessagesForToday(telegramChatId: Long): Future[List[MessageDTO]] = {
+    val p = Promise[List[MessageDTO]]
 
     Future {
       DB readOnly { implicit session =>
-        val messages: List[String] =
-          sql"""SELECT DISTINCT m.message, m.id FROM messages m
+        val messages: List[MessageDTO] =
+          sql"""SELECT DISTINCT m.id, m.message FROM messages m
                    JOIN messages_sources ms ON m.id = ms.message_id
                    JOIN sources s ON s.id = ms.source_id
                    WHERE s.telegram_chat_id = $telegramChatId
                      AND m.timestamp > NOW() - INTERVAL '1 day'
                      AND m.status != $REMOVED
                    ORDER BY m.id"""
-            .map(_.string("message"))
+            .map(rs => MessageDTO(rs))
             .list
             .apply()
 
