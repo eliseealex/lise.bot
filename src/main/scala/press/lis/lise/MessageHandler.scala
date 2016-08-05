@@ -90,19 +90,19 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
   }
 
   when(MessageWritten, stateTimeout = 2 hours) {
-    case Event(Command("next"), ReadingMessages(messages)) =>
+    case Event(Command("next"), ReadingMessages(head :: tail)) if tail != Nil =>
 
       logger.debug(s"[$chatId] Going to read again")
 
-      goto(Reading) using ReadingMessages(messages.tail)
+      goto(Reading) using ReadingMessages(tail)
   }
 
   when(Reading, stateTimeout = 2 hours) {
-    case Event(Command("next"), ReadingMessages(messages)) =>
+    case Event(Command("next"), ReadingMessages(head :: tail)) if tail != Nil =>
 
       logger.debug(s"[$chatId] Going to the next message")
 
-      goto(Reading) using ReadingMessages(messages.tail)
+      goto(Reading) using ReadingMessages(tail)
   }
 
   when(MessageRemoved, stateTimeout = 2 hours) {
@@ -112,18 +112,18 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
 
       messageDao.restoreMessage(message.leftNew.head.id).andThen({
         case Success(_) =>
-          sendMessage("Message restored. You still can add hashtags, /remove it or go to the /next")
+          sendMessage("Message restored. You can  /addtag, /remove it or go to the /next")
         case Failure(f) =>
           logger.warn(s"[${message.leftNew.head.id}] Failed to remove message", f)
       })
 
       goto(MessageWritten)
 
-    case Event(Command("next"), ReadingMessages(messages)) =>
+    case Event(Command("next"), ReadingMessages(head :: tail)) if tail != Nil =>
 
       logger.debug(s"[$chatId] Going to read again")
 
-      goto(Reading) using ReadingMessages(messages.tail)
+      goto(Reading) using ReadingMessages(tail)
   }
 
   onTransition {
@@ -135,11 +135,11 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
               .andThen{
                 case Success(_) =>
                   if (messages.size > 1) {
-                    sendMessage(s"Use /next to read ${messages.size - 1} more messages, /remove it or add hashtag")
+                    sendMessage(s"Use /next to read ${messages.size - 1} more messages, /remove it or /addtag")
                   }
                   else {
-                    sendMessage("You're great! It was your last message in this list you can /remove it, add hashtag" +
-                      " or ask me to /showtags or /getall if you're brave enough.")
+                    sendMessage("You're great! It was your last message in this list you can /remove it,  /addtag" +
+                      " or ask me for /messagesfortag or /getall if you're brave enough.")
                   }
                 case Failure(ex) =>
                   logger.warn("Failed to send message", ex)
@@ -153,12 +153,12 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
       }
 
     case _ -> Idle =>
-      messageDao.getMessagesForToday(chatId)
+      messageDao.getMessages(chatId, 1)
         .andThen {
           case Success(messages) if messages.nonEmpty =>
-            sendMessage(s"May be it's time to see /whatsnew? Today you have ${messages.size} messages.")
+            sendMessage(s"May be it's time to see messages for /lastday? Today you have ${messages.size} messages.")
           case _ =>
-            sendMessage(s"Ask me to /showtags. Maybe you forgot something interesting?")
+            sendMessage(s"Ask me to /messagesfortag. Maybe you forgot something interesting?")
         }
   }
 
@@ -185,7 +185,7 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
           stay
       }
 
-    case Event(Command("showtags"), _) =>
+    case Event(Command("messagesfortag"), _) =>
 
       messageDao.getUserTags(chatId)
         .onComplete({
@@ -205,7 +205,7 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
               resizeKeyboard = Some(true),
               oneTimeKeyboard = Some(true))
 
-            api.request(SendMessage(Left(chatId), "Choose a tag to get notes",
+            api.request(SendMessage(Left(chatId), "Choose a tag or send you own",
               replyMarkup = Some(markup)))
               .andThen(logFailRequest)
 
@@ -215,10 +215,23 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
 
       stay() using ReadingMessages(List())
 
-    case Event(Command("whatsnew"), _) =>
+    case Event(Command("lastday"), _) =>
 
       Try(Await.result(
-        messageDao.getMessagesForToday(chatId), 5 seconds)) match {
+        messageDao.getMessages(chatId, 1), 5 seconds)) match {
+        case Success(list) =>
+          goto(Reading) using ReadingMessages(list)
+
+        case Failure(x) =>
+          logger.warn(s"[$chatId] Failed to get new messages")
+
+          stay
+      }
+
+    case Event(Command("lastweek"), _) =>
+
+      Try(Await.result(
+        messageDao.getMessages(chatId, 7), 5 seconds)) match {
         case Success(list) =>
           goto(Reading) using ReadingMessages(list)
 
@@ -241,13 +254,43 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
 
       goto(MessageRemoved)
 
+    case Event(Command("addtag"), ReadingMessages(head :: tail)) =>
+
+      messageDao.getUserTags(chatId)
+        .onComplete({
+          case Success(tags) if tags.isEmpty =>
+
+            sendMessage(s"You have no tags")
+
+          case Success(tags) =>
+            val buttons =
+              tags
+                .grouped(2)
+                .map(tags => tags.map(tag => KeyboardButton(s"#$tag")))
+                .toSeq
+
+            val markup = ReplyKeyboardMarkup(
+              buttons,
+              resizeKeyboard = Some(true),
+              oneTimeKeyboard = Some(true))
+
+            api.request(SendMessage(Left(chatId), "Choose a tag to add to note",
+              replyMarkup = Some(markup)))
+              .andThen(logFailRequest)
+
+          case ex =>
+            logger.warn(s"Failed to get tags: $ex")
+        })
+
+      stay()
+
     case Event(HashTag(tag), ReadingMessages(head :: tail)) =>
 
       logger.debug(s"[$chatId] Writing hastTag [$tag] to previous message [${head.id}]")
 
       messageDao.addTag(head.id, tag)
 
-      sendMessage(s"Yup, #$tag added. You can add another one.")
+      sendMessage(s"Yup, #$tag added. You can add another one using /addtag.")
 
       stay()
 
@@ -274,7 +317,13 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
 
       sendMessage(s"Hi I'm Lise. I can keep your thoughts and organize them by #hashtags." +
         s"\n\nTry to play with me! Send me a message and add #hashtag." +
-        s"\nUse /showtags to get list of tags and then messages for some tag.")
+        s"\nUse /messagesfortag to get list of tags and then messages for some tag.")
+
+      stay
+
+    case Event(Command("next"), _) =>
+      sendMessage("You've already read all your messages. Use /lastday, /lastweek, /getall or /messagesfortag " +
+        "to get new list")
 
       stay
 
@@ -300,7 +349,7 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
 
       logger.debug(s"[$chatId] Going to written message mode.")
 
-      sendMessage("Send hashtag to add it to message.\nYou can /remove it or go back to your list using /next")
+      sendMessage("Use  /addtag to add tag.\nYou can /remove it or go back to your list using /next")
 
       goto(MessageWritten) using ReadingMessages(message :: reading.leftNew)
 

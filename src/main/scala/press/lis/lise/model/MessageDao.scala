@@ -210,7 +210,7 @@ class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
     p.future
   }
 
-  def getMessagesForToday(telegramChatId: Long): Future[List[MessageDTO]] = {
+  def getMessages(telegramChatId: Long, days: Int): Future[List[MessageDTO]] = {
     val p = Promise[List[MessageDTO]]
 
     Future {
@@ -220,7 +220,7 @@ class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
                    JOIN messages_sources ms ON m.id = ms.message_id
                    JOIN sources s ON s.id = ms.source_id
                    WHERE s.telegram_chat_id = $telegramChatId
-                     AND m.timestamp > NOW() - INTERVAL '1 day'
+                     AND m.timestamp > NOW() - ($days * INTERVAL '1 day')
                      AND m.status != $REMOVED
                    ORDER BY m.id"""
             .map(rs => MessageDTO(rs))
