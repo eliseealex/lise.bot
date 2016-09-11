@@ -25,11 +25,14 @@ object MessageHandlerRouter {
     Props(new MessageHandlerRouter(api, messageDao))
 }
 
-class MessageHandlerRouter(api: TelegramApiAkka, messageDao: MessageDao) extends Actor with StrictLogging {
+class MessageHandlerRouter(api: TelegramApiAkka, messageDao: MessageDao)
+  extends Actor with StrictLogging {
 
   val messageParser = MessageParser
 
   val messageHandlers = mutable.HashMap[Long, ActorRef]()
+
+  val messageScheduler = context.actorOf(MessageScheduler.props(self))
 
   override def receive: Receive = {
     case message: Message if message.chat.id < 0 =>
@@ -44,6 +47,8 @@ class MessageHandlerRouter(api: TelegramApiAkka, messageDao: MessageDao) extends
 
     case message: Message =>
 
+      logger.trace(s"Parsing message [$message]")
+
       val chatId: Long = message.chat.id
 
       val botMessage: BotMessage = messageParser.parse(message.text, message.messageId)
@@ -52,7 +57,7 @@ class MessageHandlerRouter(api: TelegramApiAkka, messageDao: MessageDao) extends
 
       val messageHandler =
         messageHandlers.getOrElseUpdate(chatId,
-          context.actorOf(MessageHandler.props(chatId, api, messageDao)))
+          context.actorOf(MessageHandler.props(chatId, api, messageDao, messageScheduler)))
 
       messageHandler ! botMessage
 
@@ -65,7 +70,15 @@ class MessageHandlerRouter(api: TelegramApiAkka, messageDao: MessageDao) extends
 
       val messageHandler =
         messageHandlers.getOrElseUpdate(chatId,
-          context.actorOf(MessageHandler.props(chatId, api, messageDao)))
+          context.actorOf(MessageHandler.props(chatId, api, messageDao, messageScheduler)))
+
+      messageHandler ! message
+
+    case message @ MessageScheduler.SnoozedMessage(telegramMessageId, chatId) =>
+
+      val messageHandler =
+        messageHandlers.getOrElseUpdate(chatId,
+          context.actorOf(MessageHandler.props(chatId, api, messageDao, messageScheduler)))
 
       messageHandler ! message
 

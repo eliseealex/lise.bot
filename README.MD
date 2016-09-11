@@ -37,9 +37,64 @@ sbt docker:publish
 
 You should have docker installed and make `docker login` before.
 
+### Logging
+
+I use logging to check the status of my application. 
+In most cases logging is the only way to find out that users are facing issues using my application
+
+I don't want to track activity of my users at current stage. 
+I use logging for debugging sakes only, so text logging is enough for me.
+
+For text logging i use default scala stack:
+
+- [slf4j](http://www.slf4j.org/) as a logger facade;
+- [typesafe logging](https://github.com/typesafehub/scala-logging) for scala syntactic sugar above slf4j;
+- [logback](http://logback.qos.ch/) as a logger backend;
+
+#### Logging usage
+
+This technology list might overwhelm at first, but it's easy, once you have set up everything.
+
+To set up logging I should specify its' settings using `logback.xml` file.
+I can create it in resources and logback will find it automatically.
+My development settings are in `src/main/resources/logback.xml`.
+My production settings are in `production-conf/logback.xml`.
+
+To use logging i should implement `StrictLogging` trait and then i can use logger variable from it. 
+String interpolation will be calculated lazily.
+
+```scala
+logger.debug(s"Message [$message] snoozed for [$duration]")
+```
+
+#### Color logs
+
+I print my logs in console and use ANSI colors to separate different levels (ERROR from INFO).
+If you use console, ANSI colors are working by default. 
+If you use IntelliJ Idea, use Grep Console to enable it.
+
+#### Production settings
+
+In production i separate debug and error logs in different files.
+Use rollback policies to zip my logs and move it to archive directory.
+
+You can see it in `production-conf/logback.xml`.
+
+To run and update my application in production i use docker. 
+Docker images are stateless, i should expose volume from my hard drive to write logs there.
+I'm using `-v` argument for it, like this:
+
+```bash
+
+-v /logs ~/lise-bot/logs
+-v /config ~/lise-bot/production-conf
+
+```
+
 ### Deploy
 
-You can run bot locally from docker repository simply:
+You can run bot from docker repository using:
+
 ```bash
 
  sudo docker run --net=host eliseealex/lise-bot:1.0-SNAPSHOT \

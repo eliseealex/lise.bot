@@ -11,11 +11,11 @@ import scala.concurrent.{ExecutionContext, Future, Promise}
   * @author Aleksandr Eliseev
   */
 object MessageDao {
-  case class MessageDTO(id: Long, text: String)
+  case class MessageDTO(id: Long, telegramId: Long, text: String)
 
   case object MessageDTO extends SQLSyntaxSupport[MessageDTO] {
     def apply(rs: WrappedResultSet) = new MessageDTO(
-      rs.long("id"), rs.string("message"))
+      rs.long("id"), rs.long("telegram_message_id"), rs.string("message"))
   }
 }
 
@@ -133,7 +133,7 @@ class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
     Future {
       DB readOnly { implicit session =>
         val messages: List[MessageDTO] =
-          sql"""SELECT m.id, m.message FROM messages m
+          sql"""SELECT m.id, m.telegram_message_id, m.message FROM messages m
                    JOIN messages_sources ms ON m.id = ms.message_id
                    JOIN sources s ON ms.source_id = s.id
                    WHERE s.telegram_chat_id = $telegramChatId
@@ -187,7 +187,7 @@ class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
     Future {
       DB readOnly { implicit session =>
         val messages: List[MessageDTO] =
-          sql"""SELECT DISTINCT m.id, m.message FROM messages m
+          sql"""SELECT DISTINCT m.id, m.telegram_message_id, m.message FROM messages m
                    JOIN messages_tags mt ON m.id = mt.message_id
                    JOIN tags t ON t.id = mt.tag_id
                    JOIN messages_sources ms ON m.id = ms.message_id
@@ -216,7 +216,7 @@ class MessageDao(implicit executor: ExecutionContext) extends StrictLogging {
     Future {
       DB readOnly { implicit session =>
         val messages: List[MessageDTO] =
-          sql"""SELECT DISTINCT m.id, m.message FROM messages m
+          sql"""SELECT DISTINCT m.id, m.telegram_message_id, m.message FROM messages m
                    JOIN messages_sources ms ON m.id = ms.message_id
                    JOIN sources s ON s.id = ms.source_id
                    WHERE s.telegram_chat_id = $telegramChatId

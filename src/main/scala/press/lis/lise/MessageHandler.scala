@@ -1,6 +1,6 @@
 package press.lis.lise
 
-import akka.actor.{FSM, Props}
+import akka.actor.{ActorRef, FSM, Props}
 import com.typesafe.scalalogging.{Logger, StrictLogging}
 import info.mukel.telegrambot4s.api.TelegramApiAkka
 import info.mukel.telegrambot4s.methods.{ParseMode, SendMessage}
@@ -8,6 +8,7 @@ import info.mukel.telegrambot4s.models.{KeyboardButton, Message, ReplyKeyboardHi
 import press.lis.lise.MessageHandler._
 import press.lis.lise.MessageHandlerRouter.KillMessageHandler
 import press.lis.lise.MessageParser.{Command, HashTag, TextMessage}
+import press.lis.lise.MessageScheduler.{Snooze, SnoozedMessage}
 import press.lis.lise.model.MessageDao
 import press.lis.lise.model.MessageDao.MessageDTO
 
@@ -23,18 +24,19 @@ import scala.util.{Failure, Success, Try}
   */
 object MessageHandler {
 
-  def props(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao) =
-    Props(new MessageHandler(chatId, api, messageDao))
+  def props(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao, messageScheduler: ActorRef) =
+    Props(new MessageHandler(chatId, api, messageDao, messageScheduler))
 
   def logFailRequest(logger: Logger): PartialFunction[Try[Message], Unit] = {
     case Failure(x) => logger.warn(s"Request failed: $x")
   }
 
   def sendMessageTo(api: TelegramApiAkka, logFailRequest: PartialFunction[Try[Message], Unit])
-                   (chatId: Long)(message: String)(implicit ec: ExecutionContext) =
+                   (chatId: Long)(replyToMessageId: Option[Long])(message: String)(implicit ec: ExecutionContext) =
     api.request(SendMessage(Left(chatId), message,
       parseMode = Some(ParseMode.HTML),
-      replyMarkup = Some(ReplyKeyboardHide(hideKeyboard = true))))
+      replyMarkup = Some(ReplyKeyboardHide(hideKeyboard = true)),
+      replyToMessageId = replyToMessageId))
       .andThen(logFailRequest)
 
   sealed trait BotStates
@@ -55,13 +57,20 @@ object MessageHandler {
 
 }
 
-class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao) extends FSM[BotStates, StateData] with StrictLogging {
+class MessageHandler(chatId: Long,
+                     api: TelegramApiAkka,
+                     messageDao: MessageDao,
+                     messageScheduler: ActorRef) extends FSM[BotStates, StateData] with StrictLogging {
 
   startWith(Idle, ReadingMessages(List()))
 
   val logFailRequest = MessageHandler.logFailRequest(logger)
 
-  val sendMessage: (String) => Future[Message] = MessageHandler.sendMessageTo(api, logFailRequest)(chatId)
+  val sendMessage: (String) => Future[Message] =
+    MessageHandler.sendMessageTo(api, logFailRequest)(chatId)(replyToMessageId = None)
+
+  def sendReply(messageId: Long, message: String) =
+    MessageHandler.sendMessageTo(api, logFailRequest)(chatId)(Some(messageId))(message)
 
   when(Dying, stateTimeout = 3 minutes) {
     case Event(StateTimeout, _) =>
@@ -151,15 +160,6 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
 
           logger.warn(s"Unknown state data in read state: $x")
       }
-
-    case _ -> Idle =>
-      messageDao.getMessages(chatId, 1)
-        .andThen {
-          case Success(messages) if messages.nonEmpty =>
-            sendMessage(s"May be it's time to see messages for /lastday? Today you have ${messages.size} messages.")
-          case _ =>
-            sendMessage(s"Ask me to /messagesfortag. Maybe you forgot something interesting?")
-        }
   }
 
   whenUnhandled {
@@ -284,6 +284,16 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
 
       stay()
 
+    case Event(Command("snooze"), ReadingMessages(head :: tail)) =>
+
+      logger.debug(s"[$chatId] Snoozing message [${head.id}]")
+
+      sendMessage(s"I will remind you about this message soon")
+
+      messageScheduler ! Snooze(SnoozedMessage(head.telegramId, chatId), 1 hour)
+
+      stay()
+
     case Event(HashTag(tag), ReadingMessages(head :: tail)) =>
 
       logger.debug(s"[$chatId] Writing hastTag [$tag] to previous message [${head.id}]")
@@ -333,11 +343,18 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
 
       stay
 
+    case Event(MessageScheduler.SnoozedMessage(telegramMessageId, _), _) =>
+
+      sendReply(telegramMessageId, s"You ask me to remind you about this message. " +
+        s"/snooze it one more time or /remove it")
+
+      stay
+
     case Event(TextMessage(telegramId, text, hashtags), _) =>
 
       messageDao.writeMessage(chatId, telegramId, text, hashtags).andThen({
         case Success(id) =>
-          self ! MessageDTO(id, text)
+          self ! MessageDTO(id, telegramId, text)
 
         case Failure(ex) =>
           logger.error(s"[$chatId] Failed to process message write $telegramId:", ex)
@@ -349,7 +366,7 @@ class MessageHandler(chatId: Long, api: TelegramApiAkka, messageDao: MessageDao)
 
       logger.debug(s"[$chatId] Going to written message mode.")
 
-      sendMessage("Use  /addtag to add tag.\nYou can /remove it or go back to your list using /next")
+      sendMessage("Use /addtag to add tag.\nYou can /snooze it, /remove it or go back to your list using /next")
 
       goto(MessageWritten) using ReadingMessages(message :: reading.leftNew)
 
