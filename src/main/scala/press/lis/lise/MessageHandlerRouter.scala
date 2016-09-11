@@ -74,7 +74,7 @@ class MessageHandlerRouter(api: TelegramApiAkka, messageDao: MessageDao)
 
       messageHandler ! message
 
-    case message @ MessageScheduler.SnoozedMessage(telegramMessageId, chatId) =>
+    case message @ MessageScheduler.SnoozedMessage(_, chatId, _) =>
 
       val messageHandler =
         messageHandlers.getOrElseUpdate(chatId,

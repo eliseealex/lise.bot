@@ -8,7 +8,7 @@ import info.mukel.telegrambot4s.models.{KeyboardButton, Message, ReplyKeyboardHi
 import press.lis.lise.MessageHandler._
 import press.lis.lise.MessageHandlerRouter.KillMessageHandler
 import press.lis.lise.MessageParser.{Command, HashTag, TextMessage}
-import press.lis.lise.MessageScheduler.{Snooze, SnoozedMessage}
+import press.lis.lise.MessageScheduler.{SendState, Snooze, SnoozedMessage}
 import press.lis.lise.model.MessageDao
 import press.lis.lise.model.MessageDao.MessageDTO
 
@@ -69,6 +69,8 @@ class MessageHandler(chatId: Long,
   val sendMessage: (String) => Future[Message] =
     MessageHandler.sendMessageTo(api, logFailRequest)(chatId)(replyToMessageId = None)
 
+  // TODO Reply still cool, but i should carefully think how to use it.
+  @Deprecated
   def sendReply(messageId: Long, message: String) =
     MessageHandler.sendMessageTo(api, logFailRequest)(chatId)(Some(messageId))(message)
 
@@ -121,7 +123,7 @@ class MessageHandler(chatId: Long,
 
       messageDao.restoreMessage(message.leftNew.head.id).andThen({
         case Success(_) =>
-          sendMessage("Message restored. You can  /addtag, /remove it or go to the /next")
+          sendMessage("Message restored. You can snooze it for (/15min, /hour, /4hour, /day), /addtag, /remove it or go to the /next")
         case Failure(f) =>
           logger.warn(s"[${message.leftNew.head.id}] Failed to remove message", f)
       })
@@ -144,10 +146,12 @@ class MessageHandler(chatId: Long,
               .andThen{
                 case Success(_) =>
                   if (messages.size > 1) {
-                    sendMessage(s"Use /next to read ${messages.size - 1} more messages, /remove it or /addtag")
+                    sendMessage(s"Use /next to read ${messages.size - 1} more messages, snooze it " +
+                      s"for (/15min, /hour, /4hour, /day), /remove it or /addtag")
                   }
                   else {
-                    sendMessage("You're great! It was your last message in this list you can /remove it,  /addtag" +
+                    sendMessage("You're great! It was your last message in this list you can" +
+                      " snooze it for (/15min, /hour, /4hour, /day), /remove it, /addtag" +
                       " or ask me for /messagesfortag or /getall if you're brave enough.")
                   }
                 case Failure(ex) =>
@@ -245,11 +249,13 @@ class MessageHandler(chatId: Long,
 
       logger.debug(s"[$chatId] Deleting written message [${head.id}]")
 
+      sendMessage(head.text)
+
       messageDao.removeMessage(head.id).andThen({
         case Success(_) =>
           sendMessage("Message removed. You can /restore it or go the /next if you sure.")
         case Failure(f) =>
-          logger.warn(s"[${head.id}] Failed to remove message", f)
+          logger.warn(s"[${head.id}] Failed to remove message =(", f)
       })
 
       goto(MessageRemoved)
@@ -282,7 +288,7 @@ class MessageHandler(chatId: Long,
             logger.warn(s"Failed to get tags: $ex")
         })
 
-      stay()
+      stay
 
     case Event(Command("snooze"), ReadingMessages(head :: tail)) =>
 
@@ -290,9 +296,60 @@ class MessageHandler(chatId: Long,
 
       sendMessage(s"I will remind you about this message soon")
 
-      messageScheduler ! Snooze(SnoozedMessage(head.telegramId, chatId), 1 hour)
+      messageScheduler ! Snooze(SnoozedMessage(head.telegramId, chatId, head), 1 hour)
 
-      stay()
+      stay
+
+    case Event(Command("10sec"), ReadingMessages(head :: tail)) =>
+
+      logger.debug(s"[$chatId] Snoozing message [${head.id}] for 10 seconds")
+
+      sendMessage(s"I will remind you about this message in ten seconds")
+
+      messageScheduler ! Snooze(SnoozedMessage(head.telegramId, chatId, head), 10 seconds)
+
+      stay
+
+    case Event(Command("15min"), ReadingMessages(head :: tail)) =>
+
+      logger.debug(s"[$chatId] Snoozing message [${head.id}] for 15 minutes")
+
+      sendMessage(s"I will remind you about this message in fifteen minutes")
+
+      messageScheduler ! Snooze(SnoozedMessage(head.telegramId, chatId, head), 15 minutes)
+
+      stay
+
+    case Event(Command("hour"), ReadingMessages(head :: tail)) =>
+
+      logger.debug(s"[$chatId] Snoozing message [${head.id}] for an hour")
+
+      sendMessage(s"I will remind you about this message in an hour")
+
+      messageScheduler ! Snooze(SnoozedMessage(head.telegramId, chatId, head), 1 hour)
+
+      stay
+
+    case Event(Command("4hours"), ReadingMessages(head :: tail)) =>
+
+      logger.debug(s"[$chatId] Snoozing message [${head.id}] for 4 hours")
+
+      sendMessage(s"I will remind you about this message in four hours")
+
+      messageScheduler ! Snooze(SnoozedMessage(head.telegramId, chatId, head), 4 hour)
+
+      stay
+
+    case Event(Command("day"), ReadingMessages(head :: tail)) =>
+
+      logger.debug(s"[$chatId] Snoozing message [${head.id}] for a day")
+
+      sendMessage(s"I will remind you about this message in a day")
+
+      messageScheduler ! Snooze(SnoozedMessage(head.telegramId, chatId, head), 1 day)
+
+
+      stay
 
     case Event(HashTag(tag), ReadingMessages(head :: tail)) =>
 
@@ -302,7 +359,7 @@ class MessageHandler(chatId: Long,
 
       sendMessage(s"Yup, #$tag added. You can add another one using /addtag.")
 
-      stay()
+      stay
 
     case Event(HashTag(tag), _) =>
 
@@ -320,6 +377,8 @@ class MessageHandler(chatId: Long,
     case Event(Command("showmeyourstateplease"), _) =>
 
       sendMessage(s"I'm in $stateName:$stateData")
+
+      messageScheduler ! SendState(sendMessage)
 
       stay
 
@@ -343,10 +402,17 @@ class MessageHandler(chatId: Long,
 
       stay
 
-    case Event(MessageScheduler.SnoozedMessage(telegramMessageId, _), _) =>
+    case Event(MessageScheduler.SnoozedMessage(telegramMessageId, _, messageDTO), _) =>
 
-      sendReply(telegramMessageId, s"You ask me to remind you about this message. " +
-        s"/snooze it one more time or /remove it")
+      sendMessage(s"You ask me to remind you about this message. " +
+        s"/remove it if you've done it or snooze it for (/15min, /hour, /4hour, /day):")
+        .andThen({
+          case Success(id) =>
+            sendMessage(messageDTO.text)
+
+          case Failure(ex) =>
+            logger.warn(s"[$chatId] Failed to send message [$messageDTO]")
+        })
 
       stay
 
@@ -366,7 +432,8 @@ class MessageHandler(chatId: Long,
 
       logger.debug(s"[$chatId] Going to written message mode.")
 
-      sendMessage("Use /addtag to add tag.\nYou can /snooze it, /remove it or go back to your list using /next")
+      sendMessage("Use /addtag to add tag.\nYou can snooze it for (/15min, /hour, /4hour, /day), /remove it" +
+        " or go back to your list using /next")
 
       goto(MessageWritten) using ReadingMessages(message :: reading.leftNew)
 

@@ -5,6 +5,7 @@ import java.util
 import akka.actor.{Actor, ActorRef, Props}
 import com.typesafe.scalalogging.StrictLogging
 import press.lis.lise.MessageScheduler._
+import press.lis.lise.model.MessageDao.MessageDTO
 
 import scala.collection.JavaConversions._
 import scala.concurrent.ExecutionContext.Implicits.global
@@ -21,9 +22,11 @@ object MessageScheduler {
   def props(router: ActorRef) =
     Props(new MessageScheduler(router))
 
-  case class SnoozedMessage(telegramMessageId: Long, chatId: Long)
+  case class SnoozedMessage(telegramMessageId: Long, chatId: Long, messageDTO: MessageDTO)
 
   case class Snooze(message: SnoozedMessage, duration: FiniteDuration)
+
+  case class SendState(sender: (String) => Any)
 
   case object Tick
 
@@ -32,6 +35,7 @@ object MessageScheduler {
 class MessageScheduler(router: ActorRef) extends Actor with StrictLogging {
 
   val jobs = new util.TreeMap[ScheduledTimeMillis, SnoozedMessage]()
+
   val cancellable = context.system.scheduler.schedule(
     5 seconds,
     5 seconds,
@@ -55,5 +59,8 @@ class MessageScheduler(router: ActorRef) extends Actor with StrictLogging {
       }
 
       toSendJobs.clear()
+
+    case SendState(sender) =>
+      sender(s"I have ${jobs.size} more jobs.")
   }
 }
