@@ -98,10 +98,12 @@ You can run bot from docker repository using:
 ```bash
 
  sudo docker run --net=host eliseealex/lise-bot:1.0-SNAPSHOT \
+   -v /logs ~/lise-bot/logs \
+   -v /config ~/lise-bot/production-conf \
    -Dbot.token=TOKEN \
    -Ddb.default.user=DB_USER \
-   -Ddb.default.password=DB_PASS
-   -Ddb.default.url=DB_URL
+   -Ddb.default.password=DB_PASS \
+   -Ddb.default.url=DB_URL-Dlogback.configurationFile=/config/logback.xml
 
 ```
 

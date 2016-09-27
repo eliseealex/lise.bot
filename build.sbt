@@ -7,7 +7,7 @@ scalaVersion := "2.11.8"
 resolvers += "jitpack" at "https://jitpack.io"
 
 libraryDependencies ++= Seq(
-  "com.github.mukel" %% "telegrambot4s" % "v1.2.1",
+  "com.github.mukel" %% "telegrambot4s" % "v1.2.2",
   "ch.qos.logback" % "logback-classic" % "1.1.3",
   "com.typesafe.scala-logging" %% "scala-logging" % "3.1.0",
   "org.scalikejdbc" %% "scalikejdbc"       % "2.4.1",
@@ -15,7 +15,8 @@ libraryDependencies ++= Seq(
   "org.postgresql" % "postgresql" % "9.4.1208.jre7",
   "com.zaxxer" % "HikariCP" % "2.3.3",
   "org.liquibase" % "liquibase-core" % "3.0.5",
-  "com.twitter" % "twitter-text" % "1.13.4"
+  "com.twitter" % "twitter-text" % "1.13.4",
+  "com.typesafe.akka" %% "akka-slf4j" % "2.4.8"
 
 )
 

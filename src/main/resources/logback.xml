@@ -3,7 +3,7 @@
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <!-- use IntelliJ Idea Grep Console to colorize logs -->
-            <pattern>%d{yyyy-MM-dd HH:mm:ss,SSS Z} [%highlight(%-5level)] [%cyan(%class{0})] %mdc: %msg%n</pattern>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss,SSS Z} [%highlight(%-5level)] [%cyan(%logger)] [%blue(%class{0})] %mdc: %msg%n</pattern>
         </encoder>
     </appender>
 

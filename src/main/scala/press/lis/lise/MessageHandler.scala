@@ -123,7 +123,7 @@ class MessageHandler(chatId: Long,
 
       messageDao.restoreMessage(message.leftNew.head.id).andThen({
         case Success(_) =>
-          sendMessage("Message restored. You can snooze it for (/15min, /hour, /4hour, /day), /addtag, /remove it or go to the /next")
+          sendMessage("Message restored. You can snooze it for (/15min, /hour, /4hours, /day), /addtag, /remove it or go to the /next")
         case Failure(f) =>
           logger.warn(s"[${message.leftNew.head.id}] Failed to remove message", f)
       })
@@ -147,11 +147,11 @@ class MessageHandler(chatId: Long,
                 case Success(_) =>
                   if (messages.size > 1) {
                     sendMessage(s"Use /next to read ${messages.size - 1} more messages, snooze it " +
-                      s"for (/15min, /hour, /4hour, /day), /remove it or /addtag")
+                      s"for (/15min, /hour, /4hours, /day), /remove it or /addtag")
                   }
                   else {
                     sendMessage("You're great! It was your last message in this list you can" +
-                      " snooze it for (/15min, /hour, /4hour, /day), /remove it, /addtag" +
+                      " snooze it for (/15min, /hour, /4hours, /day), /remove it, /addtag" +
                       " or ask me for /messagesfortag or /getall if you're brave enough.")
                   }
                 case Failure(ex) =>
@@ -405,7 +405,7 @@ class MessageHandler(chatId: Long,
     case Event(MessageScheduler.SnoozedMessage(telegramMessageId, _, messageDTO), _) =>
 
       sendMessage(s"You ask me to remind you about this message. " +
-        s"/remove it if you've done it or snooze it for (/15min, /hour, /4hour, /day):")
+        s"/remove it if you've done it or snooze it for (/15min, /hour, /4hours, /day):")
         .andThen({
           case Success(id) =>
             sendMessage(messageDTO.text)
@@ -432,7 +432,7 @@ class MessageHandler(chatId: Long,
 
       logger.debug(s"[$chatId] Going to written message mode.")
 
-      sendMessage("Use /addtag to add tag.\nYou can snooze it for (/15min, /hour, /4hour, /day), /remove it" +
+      sendMessage("Use /addtag to add tag.\nYou can snooze it for (/15min, /hour, /4hours, /day), /remove it" +
         " or go back to your list using /next")
 
       goto(MessageWritten) using ReadingMessages(message :: reading.leftNew)
