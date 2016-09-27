@@ -29,7 +29,7 @@
 
     <appender name="WARN-AUDIT"
               class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>./warn.log</file>
+        <file>/logs/warn.log</file>
         <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
             <Pattern>
                 %d{yyyy-MM-dd HH:mm:ss} - %msg%n
@@ -49,7 +49,7 @@
 
     <appender name="AKKA-WARN-AUDIT"
               class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>./akka-warn.log</file>
+        <file>/logs/akka-warn.log</file>
         <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
             <Pattern>
                 %d{yyyy-MM-dd HH:mm:ss} - %msg%n
@@ -69,7 +69,7 @@
 
     <appender name="SCALIKE-AUDIT"
               class="ch.qos.logback.core.rolling.RollingFileAppender">
-        <file>./scalike.log</file>
+        <file>/logs/scalike.log</file>
         <encoder class="ch.qos.logback.classic.encoder.PatternLayoutEncoder">
             <Pattern>
                 %d{yyyy-MM-dd HH:mm:ss} - %msg%n
