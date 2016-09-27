@@ -95,11 +95,11 @@
         <appender-ref ref="AKKA-WARN-AUDIT" />
     </logger>
 
-    <logger name="scalike" level="DEBUG" additivity="false">
+    <logger name="scalikejdbc" level="DEBUG" additivity="false">
         <appender-ref ref="SCALIKE-AUDIT" />
     </logger>
 
-    <root level="INFO">
+    <root level="DEBUG">
         <appender-ref ref="STDOUT" />
         <appender-ref ref="DEBUG-AUDIT" />
     </root>
