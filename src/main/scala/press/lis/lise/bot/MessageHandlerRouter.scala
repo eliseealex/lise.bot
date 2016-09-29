@@ -1,12 +1,12 @@
-package press.lis.lise
+package press.lis.lise.bot
 
 import akka.actor.{Actor, ActorRef, Kill, Props}
 import com.typesafe.scalalogging.StrictLogging
 import info.mukel.telegrambot4s.api.TelegramApiAkka
 import info.mukel.telegrambot4s.methods.{ParseMode, SendMessage}
 import info.mukel.telegrambot4s.models.{Message, ReplyKeyboardHide}
-import press.lis.lise.MessageHandlerRouter.{KillMessageHandler, Reschedule}
-import press.lis.lise.MessageParser.BotMessage
+import press.lis.lise.bot.MessageHandlerRouter.{KillMessageHandler, Reschedule}
+import press.lis.lise.bot.MessageParser.BotMessage
 import press.lis.lise.model.MessageDao
 
 import scala.collection.mutable

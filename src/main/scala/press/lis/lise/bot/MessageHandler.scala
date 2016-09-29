@@ -1,14 +1,14 @@
-package press.lis.lise
+package press.lis.lise.bot
 
 import akka.actor.{ActorRef, FSM, Props}
 import com.typesafe.scalalogging.{Logger, StrictLogging}
 import info.mukel.telegrambot4s.api.TelegramApiAkka
 import info.mukel.telegrambot4s.methods.{ParseMode, SendMessage}
 import info.mukel.telegrambot4s.models.{KeyboardButton, Message, ReplyKeyboardHide, ReplyKeyboardMarkup}
-import press.lis.lise.MessageHandler._
-import press.lis.lise.MessageHandlerRouter.KillMessageHandler
-import press.lis.lise.MessageParser.{Command, HashTag, TextMessage}
-import press.lis.lise.MessageScheduler.{SendState, Snooze, SnoozedMessage}
+import press.lis.lise.bot.MessageHandler._
+import press.lis.lise.bot.MessageHandlerRouter.KillMessageHandler
+import press.lis.lise.bot.MessageParser.{Command, HashTag, TextMessage}
+import press.lis.lise.bot.MessageScheduler.{SendState, Snooze, SnoozedMessage}
 import press.lis.lise.model.MessageDao
 import press.lis.lise.model.MessageDao.MessageDTO
 

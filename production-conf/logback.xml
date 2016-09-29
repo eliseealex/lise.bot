@@ -95,6 +95,10 @@
         <appender-ref ref="AKKA-WARN-AUDIT" />
     </logger>
 
+    <logger name="press.lis.lise.bot.Bot" level="INFO" additivity="false">
+        <appender-ref ref="AKKA-WARN-AUDIT" />
+    </logger>
+
     <logger name="scalikejdbc" level="DEBUG" additivity="false">
         <appender-ref ref="SCALIKE-AUDIT" />
     </logger>

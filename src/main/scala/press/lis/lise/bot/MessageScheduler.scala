@@ -1,10 +1,10 @@
-package press.lis.lise
+package press.lis.lise.bot
 
 import java.util
 
 import akka.actor.{Actor, ActorRef, Props}
 import com.typesafe.scalalogging.StrictLogging
-import press.lis.lise.MessageScheduler._
+import press.lis.lise.bot.MessageScheduler._
 import press.lis.lise.model.MessageDao.MessageDTO
 
 import scala.collection.JavaConversions._

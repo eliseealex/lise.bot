@@ -1,4 +1,4 @@
-package press.lis.lise
+package press.lis.lise.bot
 
 import java.util
 
