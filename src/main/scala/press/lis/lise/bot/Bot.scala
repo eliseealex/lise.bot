@@ -4,7 +4,7 @@ import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.StrictLogging
 import info.mukel.telegrambot4s.api.{Polling, TelegramBot}
 import info.mukel.telegrambot4s.models._
-import press.lis.lise.WatcherServer
+import press.lis.lise.TestServer
 import press.lis.lise.model.MessageDao
 
 /**
@@ -19,7 +19,7 @@ object Bot extends App with TelegramBot with Polling with StrictLogging {
 
   val messageHandlerRouter = system.actorOf(MessageHandlerRouter.props(api, messageDao))
 
-  system.actorOf(WatcherServer.props())
+  system.actorOf(TestServer.props())
 
   override def token = ConfigFactory.load.getString("bot.token")
 

@@ -11,18 +11,22 @@ libraryDependencies ++= {
 
   Seq(
     "com.github.mukel" %% "telegrambot4s" % "v1.2.2",
+
+    "org.slf4j" % "slf4j-api" % "1.7.21",
     "ch.qos.logback" % "logback-classic" % "1.1.3",
     "com.typesafe.scala-logging" %% "scala-logging" % "3.1.0",
+
     "org.scalikejdbc" %% "scalikejdbc" % "2.4.1",
     "org.scalikejdbc" %% "scalikejdbc-config" % "2.4.1",
     "org.postgresql" % "postgresql" % "9.4.1208.jre7",
     "com.zaxxer" % "HikariCP" % "2.3.3",
     "org.liquibase" % "liquibase-core" % "3.0.5",
+
     "com.twitter" % "twitter-text" % "1.13.4",
+
     "com.typesafe.akka" %% "akka-slf4j" % akkaV,
     "com.typesafe.akka" %% "akka-actor" % akkaV,
-    "com.typesafe.akka" %% "akka-http-experimental" % akkaV,
-    "org.scalatra" %% "scalatra" % "2.3.1"
+    "com.typesafe.akka" %% "akka-http-experimental" % akkaV
 
   )
 }

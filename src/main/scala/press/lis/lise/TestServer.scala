@@ -12,11 +12,11 @@ import com.typesafe.scalalogging.StrictLogging
   *
   * @author eliseev
   */
-object WatcherServer {
-  def props() = Props(new WatcherServer())
+object TestServer {
+  def props() = Props(new TestServer())
 }
 
-class WatcherServer() extends Actor with StrictLogging {
+class TestServer() extends Actor with StrictLogging {
 
 
   implicit val ec = context.dispatcher
