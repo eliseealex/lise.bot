@@ -91,7 +91,7 @@ class MessageHandler(chatId: Long,
       stay
   }
 
-  when(Idle, stateTimeout = 3 hours) {
+  when(Idle, stateTimeout = 24 hours) {
     case Event(StateTimeout, _) =>
       logger.debug(s"[$chatId] Idle timeout, killing actor")
 
@@ -100,7 +100,7 @@ class MessageHandler(chatId: Long,
       goto(Dying)
   }
 
-  when(MessageWritten, stateTimeout = 2 hours) {
+  when(MessageWritten, stateTimeout = 12 hours) {
     case Event(Command("next"), ReadingMessages(head :: tail)) if tail != Nil =>
 
       logger.debug(s"[$chatId] Going to read again")
@@ -108,7 +108,7 @@ class MessageHandler(chatId: Long,
       goto(Reading) using ReadingMessages(tail)
   }
 
-  when(Reading, stateTimeout = 2 hours) {
+  when(Reading, stateTimeout = 12 hours) {
     case Event(Command("next"), ReadingMessages(head :: tail)) if tail != Nil =>
 
       logger.debug(s"[$chatId] Going to the next message")
@@ -116,7 +116,7 @@ class MessageHandler(chatId: Long,
       goto(Reading) using ReadingMessages(tail)
   }
 
-  when(MessageRemoved, stateTimeout = 2 hours) {
+  when(MessageRemoved, stateTimeout = 12 hours) {
     case Event(Command("restore"), message: ReadingMessages) =>
 
       logger.debug(s"[$chatId] Restoring message [${message.leftNew.head.id}]")
@@ -402,7 +402,7 @@ class MessageHandler(chatId: Long,
 
       stay
 
-    case Event(MessageScheduler.SnoozedMessage(telegramMessageId, _, messageDTO), _) =>
+    case Event(MessageScheduler.SnoozedMessage(telegramMessageId, _, messageDTO), ReadingMessages(existingMessages)) =>
 
       sendMessage(s"You ask me to remind you about this message. " +
         s"/remove it if you've done it or snooze it for (/15min, /hour, /4hours, /day):")
@@ -414,7 +414,7 @@ class MessageHandler(chatId: Long,
             logger.warn(s"[$chatId] Failed to send message [$messageDTO]")
         })
 
-      stay
+      goto(Idle) using ReadingMessages(messageDTO :: existingMessages)
 
     case Event(TextMessage(telegramId, text, hashtags), _) =>
 

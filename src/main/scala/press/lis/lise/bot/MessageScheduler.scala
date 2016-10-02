@@ -49,6 +49,7 @@ class MessageScheduler(router: ActorRef) extends Actor with StrictLogging {
 
       val scheduledToMillis = System.currentTimeMillis() + duration.toMillis
 
+      // TODO here I can delete previous message, better use MultiMap and even Better use database for it
       jobs.put(scheduledToMillis, message)
 
     case Tick =>
