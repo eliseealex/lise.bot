@@ -4,7 +4,10 @@ Bot-reminder.
 
 ## It uses
 And contains examples of usage:
-* [Akka finite state machine](http://doc.akka.io/docs/akka/snapshot/scala/fsm.html) for contextual behavior;
+
+* [Akka](http://akka.io/) for actors;
+* [Akka persistence](http://doc.akka.io/docs/akka/2.4.11/scala/persistence.html) for persistence;
+* [Akka finite state machine](http://doc.akka.io/docs/akka/2.4.11/scala/fsm.html) for contextual behavior;
 * [Scala telegram bot api](https://github.com/mukel/telegrambot4s) for bot engine;
 * [Flyway](https://flywaydb.org/) for migration;
 * [Twitter text](https://github.com/twitter/twitter-text) for hashtag extraction;
@@ -97,14 +100,18 @@ You can run bot from docker repository using:
 
 ```bash
 
- sudo docker run --net=host eliseealex/lise-bot:1.0-SNAPSHOT \
-   -v ~/lise-bot/logs:/logs \
-   -v ~/lise-bot/production-conf:/config \
+sudo docker run \
+   --name=lise-bot --net=host \
+   -v /path/to/lise-bot/logs:/logs \
+   -v /path/to/lise-bot/journal:/journal \
+   -v /path/to/lise.bot/production-conf:/config \
+   eliseealex/lise-bot:1.0-SNAPSHOT \
    -Dbot.token=TOKEN \
-   -Ddb.default.user=DB_USER \
-   -Ddb.default.password=DB_PASS \
-   -Ddb.default.url=DB_URL \
-   -Dlogback.configurationFile=/config/logback.xml
+   -Ddb.default.user=LISE_DB_USER \
+   -Ddb.default.password=LISE_DB_PASS \
+   -Ddb.default.url=LISE_DB_URL \
+   -Dakka.persistence.journal.leveldb.dir=/journal \
+   -Dlogback.configurationFile=/config/logback.xml >> lise-bot/bot.log &
 
 ```
 

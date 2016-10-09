@@ -24,14 +24,20 @@ libraryDependencies ++= {
 
     "com.twitter" % "twitter-text" % "1.13.4",
 
+    "org.iq80.leveldb" % "leveldb" % "0.7",
+    "org.fusesource.leveldbjni" % "leveldbjni-all" % "1.8",
+
+    "com.google.guava" % "guava" % "19.0",
+
     "com.typesafe.akka" %% "akka-slf4j" % akkaV,
     "com.typesafe.akka" %% "akka-actor" % akkaV,
-    "com.typesafe.akka" %% "akka-http-experimental" % akkaV
+    "com.typesafe.akka" %% "akka-http-experimental" % akkaV,
+    "com.typesafe.akka" %% "akka-persistence" % akkaV
 
   )
 }
 
-mainClass in Compile := Some("press.lis.lise.Bot")
+mainClass in Compile := Some("press.lis.lise.bot.Bot")
 
 flywayUrl := "jdbc:postgresql://localhost:5432/lise"
 
