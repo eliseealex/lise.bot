@@ -1,5 +1,7 @@
 package press.lis.lise.bot
 
+import java.util.Objects
+
 import akka.actor.{ActorRef, FSM, Props}
 import com.typesafe.scalalogging.{Logger, StrictLogging}
 import info.mukel.telegrambot4s.api.TelegramApiAkka
@@ -123,7 +125,8 @@ class MessageHandler(chatId: Long,
 
       messageDao.restoreMessage(message.leftNew.head.id).andThen({
         case Success(_) =>
-          sendMessage("Message restored. You can snooze it for (/15min, /hour, /4hours, /day), /addtag, /remove it or go to the /next")
+          sendMessage("Message restored. You can snooze it for (/15min, /hour, /4hours, /day), /addtag, " +
+            "/remove it or go to the /next")
         case Failure(f) =>
           logger.warn(s"[${message.leftNew.head.id}] Failed to remove message", f)
       })
@@ -414,7 +417,11 @@ class MessageHandler(chatId: Long,
             logger.warn(s"[$chatId] Failed to send message [$messageDTO]")
         })
 
-      goto(Idle) using ReadingMessages(messageDTO :: existingMessages)
+      val messageRemoved = existingMessages.filterNot(message => Objects.equals(message.id, messageDTO.id))
+
+      logger.info(s"Removed $messageDTO: $messageRemoved")
+
+      goto(Idle) using ReadingMessages(messageDTO :: messageRemoved)
 
     case Event(TextMessage(telegramId, text, hashtags), _) =>
 
