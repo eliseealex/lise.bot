@@ -7,7 +7,7 @@ scalaVersion := "2.11.8"
 resolvers += "jitpack" at "https://jitpack.io"
 
 libraryDependencies ++= {
-  val akkaV = "2.4.8"
+  val akkaV = "2.4.11"
 
   Seq(
     "com.github.mukel" %% "telegrambot4s" % "v1.2.2",
