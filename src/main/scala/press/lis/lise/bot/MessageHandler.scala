@@ -338,7 +338,13 @@ class MessageHandler(chatId: Long,
 
       logger.debug(s"[$chatId] Snoozing message [${head.id}]")
 
-      sendMessage(s"I will remind you about this message soon")
+      sendMessage(head.text)
+        .andThen {
+          case Success(_) =>
+            sendMessage(s"I will remind you about this message soon")
+          case Failure(ex) =>
+            logger.warn("Failed to send message", ex)
+        }
 
       messageScheduler ! Snooze(SnoozedMessage(head.telegramId, chatId, head), 1 hour)
 
@@ -348,7 +354,13 @@ class MessageHandler(chatId: Long,
 
       logger.debug(s"[$chatId] Snoozing message [${head.id}] for 10 seconds")
 
-      sendMessage(s"I will remind you about this message in ten seconds")
+      sendMessage(head.text)
+        .andThen {
+          case Success(_) =>
+            sendMessage(s"I will remind you about this message in ten seconds")
+          case Failure(ex) =>
+            logger.warn("Failed to send message", ex)
+        }
 
       messageScheduler ! Snooze(SnoozedMessage(head.telegramId, chatId, head), 10 seconds)
 
@@ -358,7 +370,13 @@ class MessageHandler(chatId: Long,
 
       logger.debug(s"[$chatId] Snoozing message [${head.id}] for 15 minutes")
 
-      sendMessage(s"I will remind you about this message in fifteen minutes")
+      sendMessage(head.text)
+        .andThen {
+          case Success(_) =>
+            sendMessage(s"I will remind you about this message in fifteen minutes")
+          case Failure(ex) =>
+            logger.warn("Failed to send message", ex)
+        }
 
       messageScheduler ! Snooze(SnoozedMessage(head.telegramId, chatId, head), 15 minutes)
 
@@ -368,7 +386,13 @@ class MessageHandler(chatId: Long,
 
       logger.debug(s"[$chatId] Snoozing message [${head.id}] for an hour")
 
-      sendMessage(s"I will remind you about this message in an hour")
+      sendMessage(head.text)
+        .andThen {
+          case Success(_) =>
+            sendMessage(s"I will remind you about this message in an hour")
+          case Failure(ex) =>
+            logger.warn("Failed to send message", ex)
+        }
 
       messageScheduler ! Snooze(SnoozedMessage(head.telegramId, chatId, head), 1 hour)
 
@@ -378,7 +402,13 @@ class MessageHandler(chatId: Long,
 
       logger.debug(s"[$chatId] Snoozing message [${head.id}] for 4 hours")
 
-      sendMessage(s"I will remind you about this message in four hours")
+      sendMessage(head.text)
+        .andThen {
+          case Success(_) =>
+            sendMessage(s"I will remind you about this message in four hours")
+          case Failure(ex) =>
+            logger.warn("Failed to send message", ex)
+        }
 
       messageScheduler ! Snooze(SnoozedMessage(head.telegramId, chatId, head), 4 hour)
 
@@ -388,7 +418,13 @@ class MessageHandler(chatId: Long,
 
       logger.debug(s"[$chatId] Snoozing message [${head.id}] for a day")
 
-      sendMessage(s"I will remind you about this message in a day")
+      sendMessage(head.text)
+        .andThen {
+          case Success(_) =>
+            sendMessage(s"I will remind you about this message in a day")
+          case Failure(ex) =>
+            logger.warn("Failed to send message", ex)
+        }
 
       messageScheduler ! Snooze(SnoozedMessage(head.telegramId, chatId, head), 1 day)
 
