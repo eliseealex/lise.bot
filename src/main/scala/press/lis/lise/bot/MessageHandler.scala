@@ -466,7 +466,17 @@ class MessageHandler(chatId: Long,
 
       sendMessage(s"Hi I'm Lise. I can keep your thoughts and organize them by #hashtags." +
         s"\n\nTry to play with me! Send me a message and add #hashtag." +
-        s"\nUse /messagesfortag to get list of tags and then messages for some tag.")
+        s"\nUse /messagesfortag to get list of tags and then messages for some tag." +
+        s"\n\nIf you face any problem or like this bot, write to @eliseealex")
+
+      stay
+
+    case Event(Command("help"), _) =>
+
+      sendMessage(s"Hi I'm Lise. I can keep your thoughts and organize them by #hashtags." +
+        s"\n\nTry to play with me! Send me a message and add #hashtag." +
+        s"\nUse /messagesfortag to get list of tags and then messages for some tag." +
+        s"\n\nIf you face any problem or like this bot, write to @eliseealex")
 
       stay
 
