@@ -2,7 +2,9 @@ package press.lis.lise.bot
 
 import java.util.Objects
 
-import akka.actor.{ActorRef, FSM, Props}
+import akka.actor.{ActorRef, Props}
+import akka.persistence.fsm.PersistentFSM
+import akka.persistence.fsm.PersistentFSM.FSMState
 import com.typesafe.scalalogging.{Logger, StrictLogging}
 import info.mukel.telegrambot4s.api.TelegramApiAkka
 import info.mukel.telegrambot4s.methods.{ParseMode, SendMessage}
@@ -18,10 +20,13 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration._
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.language.postfixOps
+import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Try}
 
 
 /**
+  * Uses akka persistent fsm
+  *
   * @author Aleksandr Eliseev
   */
 object MessageHandler {
@@ -41,28 +46,48 @@ object MessageHandler {
       replyToMessageId = replyToMessageId))
       .andThen(logFailRequest)
 
-  sealed trait BotStates
+  sealed trait BotStates extends FSMState
 
   sealed trait StateData
 
+  sealed trait BotEvent
+
+  case object Next extends BotEvent
+
+  case class NewList(newList: List[MessageDTO]) extends BotEvent
+
+  case class AddMessage(newMessage: MessageDTO) extends BotEvent
+
   case class ReadingMessages(leftNew: List[MessageDTO]) extends StateData
 
-  case object Idle extends BotStates
+  case object Idle extends BotStates {
+    override def identifier: String = "Idle"
+  }
 
-  case object MessageWritten extends BotStates
+  case object MessageWritten extends BotStates {
+    override def identifier: String = "Message Written"
+  }
 
-  case object MessageRemoved extends BotStates
+  case object MessageRemoved extends BotStates {
+    override def identifier: String = "Message Removed"
+  }
 
-  case object Reading extends BotStates
+  case object Reading extends BotStates {
+    override def identifier: String = "Reading"
+  }
 
-  case object Dying extends BotStates
+  case object Dying extends BotStates {
+    override def identifier: String = "Dying"
+  }
 
 }
 
 class MessageHandler(chatId: Long,
                      api: TelegramApiAkka,
                      messageDao: MessageDao,
-                     messageScheduler: ActorRef) extends FSM[BotStates, StateData] with StrictLogging {
+                     messageScheduler: ActorRef)(implicit val domainEventClassTag: ClassTag[BotEvent])
+  extends PersistentFSM[BotStates, StateData, BotEvent]
+    with StrictLogging {
 
   startWith(Idle, ReadingMessages(List()))
 
@@ -71,10 +96,28 @@ class MessageHandler(chatId: Long,
   val sendMessage: (String) => Future[Message] =
     MessageHandler.sendMessageTo(api, logFailRequest)(chatId)(replyToMessageId = None)
 
+  override def persistenceId: String = s"MessageHandler-$chatId"
+
   // TODO Reply still cool, but i should carefully think how to use it.
   @Deprecated
   def sendReply(messageId: Long, message: String) =
-    MessageHandler.sendMessageTo(api, logFailRequest)(chatId)(Some(messageId))(message)
+  MessageHandler.sendMessageTo(api, logFailRequest)(chatId)(Some(messageId))(message)
+
+  override def applyEvent(domainEvent: BotEvent, currentData: StateData): StateData = currentData match {
+    case ReadingMessages(messages) =>
+      domainEvent match {
+        case Next =>
+          ReadingMessages(messages.tail)
+        case NewList(newMessages) =>
+          ReadingMessages(newMessages)
+        case AddMessage(message) =>
+          ReadingMessages(message :: messages)
+      }
+
+    case x =>
+      logger.warn(s"Unknown data type: $x")
+      x
+  }
 
   when(Dying, stateTimeout = 3 minutes) {
     case Event(StateTimeout, _) =>
@@ -93,29 +136,28 @@ class MessageHandler(chatId: Long,
       stay
   }
 
-  when(Idle, stateTimeout = 24 hours) {
-    case Event(StateTimeout, _) =>
-      logger.debug(s"[$chatId] Idle timeout, killing actor")
-
-      context.parent ! KillMessageHandler(chatId)
-
-      goto(Dying)
-  }
-
-  when(MessageWritten, stateTimeout = 12 hours) {
+  when(Idle, stateTimeout = 2 hours) {
     case Event(Command("next"), ReadingMessages(head :: tail)) if tail != Nil =>
 
       logger.debug(s"[$chatId] Going to read again")
 
-      goto(Reading) using ReadingMessages(tail)
+      goto(Reading) applying Next
   }
 
-  when(Reading, stateTimeout = 12 hours) {
+  when(MessageWritten, stateTimeout = 2 hours) {
+    case Event(Command("next"), ReadingMessages(head :: tail)) if tail != Nil =>
+
+      logger.debug(s"[$chatId] Going to read again")
+
+      goto(Reading) applying Next
+  }
+
+  when(Reading, stateTimeout = 2 hours) {
     case Event(Command("next"), ReadingMessages(head :: tail)) if tail != Nil =>
 
       logger.debug(s"[$chatId] Going to the next message")
 
-      goto(Reading) using ReadingMessages(tail)
+      goto(Reading) applying Next
   }
 
   when(MessageRemoved, stateTimeout = 12 hours) {
@@ -137,7 +179,7 @@ class MessageHandler(chatId: Long,
 
       logger.debug(s"[$chatId] Going to read again")
 
-      goto(Reading) using ReadingMessages(tail)
+      goto(Reading) applying Next
   }
 
   onTransition {
@@ -146,21 +188,20 @@ class MessageHandler(chatId: Long,
         case ReadingMessages(messages) =>
 
           sendMessage(messages.head.text)
-              .andThen{
-                case Success(_) =>
-                  if (messages.size > 1) {
-                    sendMessage(s"Use /next to read ${messages.size - 1} more messages, snooze it " +
-                      s"for (/15min, /hour, /4hours, /day), /remove it or /addtag")
-                  }
-                  else {
-                    sendMessage("You're great! It was your last message in this list you can" +
-                      " snooze it for (/15min, /hour, /4hours, /day), /remove it, /addtag" +
-                      " or ask me for /messagesfortag or /getall if you're brave enough.")
-                  }
-                case Failure(ex) =>
-                  logger.warn("Failed to send message", ex)
-              }
-
+            .andThen {
+              case Success(_) =>
+                if (messages.size > 1) {
+                  sendMessage(s"Use /next to read ${messages.size - 1} more messages, snooze it " +
+                    s"for (/15min, /hour, /4hours, /day), /remove it or /addtag")
+                }
+                else {
+                  sendMessage("You're great! It was your last message in this list you can" +
+                    " snooze it for (/15min, /hour, /4hours, /day), /remove it, /addtag" +
+                    " or ask me for /messagesfortag or /getall if you're brave enough.")
+                }
+              case Failure(ex) =>
+                logger.warn("Failed to send message", ex)
+            }
 
 
         case x =>
@@ -183,7 +224,7 @@ class MessageHandler(chatId: Long,
 
         case Success(messageList) =>
 
-          goto(Reading) using ReadingMessages(messageList)
+          goto(Reading) applying NewList(messageList)
 
         case Failure(ex) =>
 
@@ -220,14 +261,14 @@ class MessageHandler(chatId: Long,
             logger.warn(s"Failed to get tags: $ex")
         })
 
-      stay() using ReadingMessages(List())
+      stay() applying NewList(List())
 
     case Event(Command("lastday"), _) =>
 
       Try(Await.result(
-        messageDao.getMessages(chatId, 1), 5 seconds)) match {
+        messageDao.getMessages(chatId, 1), 30 seconds)) match {
         case Success(list) =>
-          goto(Reading) using ReadingMessages(list)
+          goto(Reading) applying NewList(list)
 
         case Failure(x) =>
           logger.warn(s"[$chatId] Failed to get new messages")
@@ -238,9 +279,9 @@ class MessageHandler(chatId: Long,
     case Event(Command("lastweek"), _) =>
 
       Try(Await.result(
-        messageDao.getMessages(chatId, 7), 5 seconds)) match {
+        messageDao.getMessages(chatId, 7), 30 seconds)) match {
         case Success(list) =>
-          goto(Reading) using ReadingMessages(list)
+          goto(Reading) applying NewList(list)
 
         case Failure(x) =>
           logger.warn(s"[$chatId] Failed to get new messages")
@@ -369,7 +410,7 @@ class MessageHandler(chatId: Long,
       Try(Await.result(
         messageDao.getMessagesByTag(chatId, tag), 5 seconds)) match {
         case Success(list) =>
-          goto(Reading) using ReadingMessages(list)
+          goto(Reading) applying NewList(list)
 
         case Failure(x) =>
           logger.warn(s"[$chatId] Failed to obtain message by tag $tag")
@@ -419,9 +460,7 @@ class MessageHandler(chatId: Long,
 
       val messageRemoved = existingMessages.filterNot(message => Objects.equals(message.id, messageDTO.id))
 
-      logger.info(s"Removed $messageDTO: $messageRemoved")
-
-      goto(Idle) using ReadingMessages(messageDTO :: messageRemoved)
+      goto(Idle) applying NewList(messageDTO :: messageRemoved)
 
     case Event(TextMessage(telegramId, text, hashtags), _) =>
 
@@ -442,12 +481,17 @@ class MessageHandler(chatId: Long,
       sendMessage("Use /addtag to add tag.\nYou can snooze it for (/15min, /hour, /4hours, /day), /remove it" +
         " or go back to your list using /next")
 
-      goto(MessageWritten) using ReadingMessages(message :: reading.leftNew)
+      goto(MessageWritten) applying AddMessage(message)
 
 
     case Event(StateTimeout, _) =>
+      logger.debug(s"[$chatId] Timeout, killing actor")
 
-      goto(Idle)
+      saveStateSnapshot()
+
+      context.parent ! KillMessageHandler(chatId)
+
+      goto(Dying)
 
     case _ =>
       logger.warn("Unknown message type")

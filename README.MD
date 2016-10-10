@@ -111,6 +111,7 @@ sudo docker run \
    -Ddb.default.password=LISE_DB_PASS \
    -Ddb.default.url=LISE_DB_URL \
    -Dakka.persistence.journal.leveldb.dir=/journal \
+   -Dakka.persistence.snapshot-store.leveldb.dir=/journal/snapshot \
    -Dlogback.configurationFile=/config/logback.xml >> lise-bot/bot.log &
 
 ```
