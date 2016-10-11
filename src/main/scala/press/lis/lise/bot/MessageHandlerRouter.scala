@@ -5,6 +5,7 @@ import com.typesafe.scalalogging.StrictLogging
 import info.mukel.telegrambot4s.api.TelegramApiAkka
 import info.mukel.telegrambot4s.methods.{ParseMode, SendMessage}
 import info.mukel.telegrambot4s.models.{Message, ReplyKeyboardHide}
+import press.lis.lise.bot.MessageHandler.Start
 import press.lis.lise.bot.MessageHandlerRouter.{KillMessageHandler, Reschedule}
 import press.lis.lise.bot.MessageParser.BotMessage
 import press.lis.lise.model.MessageDao
@@ -56,8 +57,11 @@ class MessageHandlerRouter(api: TelegramApiAkka, messageDao: MessageDao)
       logger.debug(s"[$chatId] Accepted message: $botMessage")
 
       val messageHandler =
-        messageHandlers.getOrElseUpdate(chatId,
-          context.actorOf(MessageHandler.props(chatId, api, messageDao, messageScheduler)))
+        messageHandlers.getOrElseUpdate(chatId, {
+          val actor: ActorRef = context.actorOf(MessageHandler.props(chatId, api, messageDao, messageScheduler))
+          actor ! Start
+          actor
+        })
 
       messageHandler ! botMessage
 
@@ -69,16 +73,22 @@ class MessageHandlerRouter(api: TelegramApiAkka, messageDao: MessageDao)
     case Reschedule(chatId, message) =>
 
       val messageHandler =
-        messageHandlers.getOrElseUpdate(chatId,
-          context.actorOf(MessageHandler.props(chatId, api, messageDao, messageScheduler)))
+        messageHandlers.getOrElseUpdate(chatId, {
+          val actor: ActorRef = context.actorOf(MessageHandler.props(chatId, api, messageDao, messageScheduler))
+          actor ! Start
+          actor
+        })
 
       messageHandler ! message
 
     case message @ MessageScheduler.SnoozedMessage(_, chatId, _) =>
 
       val messageHandler =
-        messageHandlers.getOrElseUpdate(chatId,
-          context.actorOf(MessageHandler.props(chatId, api, messageDao, messageScheduler)))
+        messageHandlers.getOrElseUpdate(chatId, {
+          val actor: ActorRef = context.actorOf(MessageHandler.props(chatId, api, messageDao, messageScheduler))
+          actor ! Start
+          actor
+        })
 
       messageHandler ! message
 

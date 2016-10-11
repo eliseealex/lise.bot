@@ -10,7 +10,7 @@ import info.mukel.telegrambot4s.api.TelegramApiAkka
 import info.mukel.telegrambot4s.methods.{ParseMode, SendMessage}
 import info.mukel.telegrambot4s.models.{KeyboardButton, Message, ReplyKeyboardHide, ReplyKeyboardMarkup}
 import press.lis.lise.bot.MessageHandler._
-import press.lis.lise.bot.MessageHandlerRouter.KillMessageHandler
+import press.lis.lise.bot.MessageHandlerRouter.{KillMessageHandler, Reschedule}
 import press.lis.lise.bot.MessageParser.{Command, HashTag, TextMessage}
 import press.lis.lise.bot.MessageScheduler.{SendState, Snooze, SnoozedMessage}
 import press.lis.lise.model.MessageDao
@@ -51,6 +51,10 @@ object MessageHandler {
   sealed trait StateData
 
   sealed trait BotEvent
+
+  case object Start
+
+  case object Shutdown
 
   case object Next extends BotEvent
 
@@ -129,9 +133,19 @@ class MessageHandler(chatId: Long,
 
       goto(Dying)
 
+    case Event(Shutdown, _) =>
+
+      context.stop(self)
+
+      stay
+
+    case Event(Start, _) =>
+
+      goto(Idle)
+
     case Event(anything, _) =>
       // Rescheduling to process after restart
-      context.parent ! anything
+      context.parent ! Reschedule(chatId, anything)
 
       stay
   }
