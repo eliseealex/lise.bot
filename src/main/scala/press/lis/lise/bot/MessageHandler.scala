@@ -122,7 +122,7 @@ class MessageHandler(chatId: Long,
   when(Dying, stateTimeout = 3 minutes) {
     case Event(StateTimeout, _) =>
 
-      logger.warn(s"[$chatId] Rescheduling killer for")
+      logger.warn(s"[$chatId] Rescheduling killer")
 
       // Messages have at most once delivery. Guarantee eventual consistency.
       context.parent ! KillMessageHandler(chatId)

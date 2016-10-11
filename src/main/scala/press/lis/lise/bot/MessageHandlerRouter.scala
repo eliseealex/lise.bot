@@ -82,7 +82,7 @@ class MessageHandlerRouter(api: TelegramApiAkka, messageDao: MessageDao)
 
       messageHandler ! message
 
-    case _ =>
-      logger.warn("Use Message in router!")
+    case x =>
+      logger.warn(s"Use Message in router! Instead of: $x")
   }
 }
