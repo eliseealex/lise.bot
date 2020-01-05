@@ -1,6 +1,6 @@
 # Lise.bot
 
-Bot-reminder.
+Bot-reminder for Telegram
 
 ## It uses
 And contains examples of usage:
@@ -16,21 +16,22 @@ And contains examples of usage:
 * [Docker](https://www.docker.com/) for deployment ([docker repository](https://hub.docker.com/r/eliseealex/lise-bot/));
 
 ## Roadmap
-This bot should accept your messages, parse hashtags and let your
+This bot should accept your messages, parse hashtags and let you navigate across messages and hashtags
 
 ## Installation
-To use this bot locally you will need:
+To use this bot locally you need:
 
-* Install java 8;
-* _Optional_ Set up IntelliJ Idea (tip: you can use [EAP](https://confluence.jetbrains.com/display/IDEADEV/EAP) for free);
-* Clone this project and install scala and sbt;
-* _Optional_ Tip: use IntelliJ Idea Grep Console to colorize logs;
-* Install and set up Postgres (read more in below);
-* Create bot and specify token with `-Dbot.token=TOKEN` VM-option.
+* Install java 8
+* _Optional_ Set up IntelliJ Idea (tip: you can use [EAP](https://confluence.jetbrains.com/display/IDEADEV/EAP) for free for home projects)
+* Clone this project
+* Install scala and sbt
+* _Optional_ Tip: use IntelliJ Idea Grep Console to view color logs
+* Install and set up Postgres (read more below)
+* Create bot and specify token with `-Dbot.token=TOKEN` VM-option
 
 ### Docker publishing
 
-This application uses [sbt native plugin](http://www.scala-sbt.org/sbt-native-packager/) to package jar and docker image.
+This application uses [sbt native plugin](http://www.scala-sbt.org/sbt-native-packager/) to package jar and docker images
 
 You can publish your application to docker hub using:
 
@@ -38,32 +39,31 @@ You can publish your application to docker hub using:
 sbt docker:publish
 ```
 
-You should have docker installed and make `docker login` before.
+You should have docker installed and make `docker login` before to push to docker hub (by default it's public).
 
 ### Logging
 
 I use logging to check the status of my application. 
-In most cases logging is the only way to find out that users are facing issues using my application
+In most cases logging is the only way to find out that users are facing issues in the application
 
-I don't want to track activity of my users at current stage. 
-I use logging for debugging sakes only, so text logging is enough for me.
+Logging is used for debugging sakes only, so text logging is enough for me. I'm not tracking the activity of users at the current stage
 
 For text logging i use default scala stack:
 
-- [slf4j](http://www.slf4j.org/) as a logger facade;
-- [typesafe logging](https://github.com/typesafehub/scala-logging) for scala syntactic sugar above slf4j;
-- [logback](http://logback.qos.ch/) as a logger backend;
+- [slf4j](http://www.slf4j.org/) as a logger facade
+- [typesafe logging](https://github.com/typesafehub/scala-logging) for syntactic sugar above slf4j
+- [logback](http://logback.qos.ch/) as a logger backend
 
 #### Logging usage
 
 This technology list might overwhelm at first, but it's easy, once you have set up everything.
 
-To set up logging I should specify its' settings using `logback.xml` file.
-I can create it in resources and logback will find it automatically.
+To set up logging you should specify its' settings using `logback.xml` file.
+You can create it in resources and logback will find it automatically.
 My development settings are in `src/main/resources/logback.xml`.
 My production settings are in `production-conf/logback.xml`.
 
-To use logging i should implement `StrictLogging` trait and then i can use logger variable from it. 
+To use logging you should implement `StrictLogging` trait and then i can use logger variable from it. 
 String interpolation will be calculated lazily.
 
 ```scala
